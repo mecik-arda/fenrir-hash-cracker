@@ -1,0 +1,9 @@
+{
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.associations": {
+        "*.cl": "c",
+        "*.rule": "plaintext",
+        "*.hpp": "cpp",
+        "*.cpp": "cpp"
+    }
+}

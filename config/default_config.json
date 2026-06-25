@@ -1,0 +1,35 @@
+{
+  "batch": {
+    "fast_hash_size": 1000000,
+    "slow_hash_size": 1024,
+    "api_size": 100
+  },
+  "checkpoint": {
+    "interval_seconds": 30,
+    "file": "fenrir.checkpoint"
+  },
+  "gpu": {
+    "default_device": 0,
+    "work_group_auto_tune": true,
+    "kernel_cache_dir": ".fenrir_kernel_cache",
+    "async_pipeline": true,
+    "async_buffers": 2
+  },
+  "cpu": {
+    "enable_simd": true
+  },
+  "api": {
+    "timeout_seconds": 10,
+    "max_retries": 3,
+    "rate_limit_buffer": 1.1
+  },
+  "logging": {
+    "level": "info",
+    "console_colors": true,
+    "file": ""
+  },
+  "output": {
+    "cracked_file": "cracked.txt",
+    "append_mode": false
+  }
+}

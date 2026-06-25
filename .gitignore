@@ -1,0 +1,89 @@
+# === Build & Output ===
+build/
+cmake-build-*/
+out/
+_build/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.lib
+fenrir
+fenrir.exe
+
+# === Cracked Passwords ===
+cracked.txt
+*.cracked
+*.pot
+
+# === Checkpoints ===
+fenrir.checkpoint
+*.checkpoint
+
+# === Config & Secrets ===
+fenrir.json
+config.local.json
+*.local.json
+.env
+*.env
+*.key
+secrets/
+
+# === Kernel Cache ===
+.fenrir_kernel_cache/
+
+# === Dependencies (fetched by CMake) ===
+build/_deps/
+build/_build/
+third_party/
+_deps/
+
+# === Logs ===
+*.log
+logs/
+
+# === IDE & Editor ===
+.idea/
+.vs/
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+Session.vim
+
+# === macOS ===
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# === Windows ===
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# === Linux ===
+.directory
+.Trash-*
+
+# === CMake Generated ===
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# === Package Managers ===
+vcpkg_installed/
+conanbuild/
+
+# === Core Dumps ===
+core
+*.core
+core.*
