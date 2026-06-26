@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(fenrir-hash-cracker
-    VERSION 1.0.0
+    VERSION 1.1.0
     DESCRIPTION "GPU-accelerated password hash auditing tool"
     LANGUAGES CXX C)
 
@@ -100,8 +100,13 @@ add_library(fenrir_core STATIC
     src/core/SHA3Engine.cpp
     src/core/PBKDF2Engine.cpp
     src/core/Argon2Engine.cpp
+    src/core/SHA384Engine.cpp
+    src/core/Blake2bEngine.cpp
+    src/core/HMACMD5Engine.cpp
+    src/core/HMACSHA256Engine.cpp
     src/core/Pipeline.cpp
-    src/core/ResultWriter.cpp)
+    src/core/ResultWriter.cpp
+    src/core/Benchmark.cpp)
 target_include_directories(fenrir_core PUBLIC src)
 target_link_libraries(fenrir_core PUBLIC nlohmann_json::nlohmann_json spdlog::spdlog fenrir_argon2 fenrir_bcrypt)
 
@@ -120,6 +125,7 @@ add_library(fenrir_attack STATIC
     src/attack/MaskAttack.cpp
     src/attack/HybridAttack.cpp
     src/attack/ApiAttack.cpp
+    src/attack/CombinatorAttack.cpp
     src/attack/AttackRegistry.cpp)
 target_include_directories(fenrir_attack PUBLIC src)
 target_link_libraries(fenrir_attack PUBLIC fenrir_core)
@@ -159,6 +165,8 @@ if(FENRIR_USE_CURL)
     add_library(fenrir_api STATIC
         src/api/LeakLookupProvider.cpp
         src/api/HashKillerProvider.cpp
+        src/api/HashToolkitProvider.cpp
+        src/api/Md5DecryptProvider.cpp
         src/api/ApiManager.cpp
         src/api/RateLimiter.cpp)
     target_include_directories(fenrir_api PUBLIC src)

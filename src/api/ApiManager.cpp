@@ -1,6 +1,8 @@
 #include "ApiManager.hpp"
 #include "LeakLookupProvider.hpp"
 #include "HashKillerProvider.hpp"
+#include "HashToolkitProvider.hpp"
+#include "Md5DecryptProvider.hpp"
 #include "../utils/Logger.hpp"
 
 #include <algorithm>
@@ -21,6 +23,10 @@ std::unique_ptr<IApiProvider> ApiManager::createProvider(
         return std::make_unique<LeakLookupProvider>(apiKey);
     if (lower == "hashkiller")
         return std::make_unique<HashKillerProvider>(apiKey);
+    if (lower == "hashtoolkit")
+        return std::make_unique<HashToolkitProvider>(apiKey);
+    if (lower == "md5decrypt")
+        return std::make_unique<Md5DecryptProvider>(apiKey);
 
     utils::Logger::error("Unknown API provider: " + name);
     return nullptr;

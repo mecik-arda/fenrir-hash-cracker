@@ -4,6 +4,7 @@
 #include "MaskAttack.hpp"
 #include "HybridAttack.hpp"
 #include "ApiAttack.hpp"
+#include "CombinatorAttack.hpp"
 #include <algorithm>
 
 namespace fenrir { namespace attack {
@@ -23,6 +24,8 @@ std::unique_ptr<IAttackMode> AttackRegistry::create(const std::string& name) {
         return std::make_unique<HybridAttack>();
     if (lower == "api")
         return std::make_unique<ApiAttack>();
+    if (lower == "combinator" || lower == "comb")
+        return std::make_unique<CombinatorAttack>();
 
     return nullptr;
 }

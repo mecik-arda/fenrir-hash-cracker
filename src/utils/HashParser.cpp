@@ -53,6 +53,12 @@ core::HashType HashParser::detectType(const std::string& hashStr) {
             return core::HashType::ARGON2;
         if (s.size() > 7 && s.substr(0, 8) == "$pbkdf2-$")
             return core::HashType::PBKDF2;
+        if (s.size() > 8 && toLower(s.substr(0, 8)) == "$blake2b$")
+            return core::HashType::BLAKE2B;
+        if (s.size() > 10 && toLower(s.substr(0, 10)) == "$hmac-md5$")
+            return core::HashType::HMAC_MD5;
+        if (s.size() > 13 && toLower(s.substr(0, 13)) == "$hmac-sha256$")
+            return core::HashType::HMAC_SHA256;
     }
 
 
@@ -74,6 +80,7 @@ core::HashType HashParser::detectType(const std::string& hashStr) {
         case 32:  return core::HashType::MD5;
         case 40:  return core::HashType::SHA1;
         case 64:  return core::HashType::SHA256;
+        case 96:  return core::HashType::SHA384;
         case 128: return core::HashType::SHA512;
         default:  return core::HashType::MD5;
     }

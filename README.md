@@ -1,8 +1,8 @@
-# 🐺 Fenrir Hash Cracker v1.0.0
+# 🐺 Fenrir Hash Cracker v1.1.0
 
 **GPU-accelerated password hash auditing tool** — C++17 · OpenCL · AVX2/AVX-512 · CLI
 
-Fenrir is a high-performance password strength auditing tool that leverages GPU computing (via OpenCL) and CPU SIMD (AVX2/AVX-512) to crack or verify password hashes. It supports dictionary attacks, rule-based mutations, brute-force/mask attacks, hybrid combinations, and online leak-database API lookups.
+Fenrir is a high-performance password strength auditing tool that leverages GPU computing (via OpenCL) and CPU SIMD (AVX2/AVX-512) to crack or verify password hashes. It supports 14 hash algorithms, 6 attack modes, potfile-based resume, built-in benchmarking, and online leak-database API lookups.
 
 ---
 
@@ -23,18 +23,23 @@ You may only use Fenrir on:
 
 | Algorithm | CPU Engine | SIMD (AVX2) | GPU Kernel | Salt | Speed |
 |-----------|-----------|-------------|------------|------|-------|
-| MD5 | ✅ Full RFC 1321 | ✅ 8-way AVX2 | ✅ | ✅ | Fast |
-| SHA1 | ✅ Full FIPS 180-4 | — | ✅ | ✅ | Fast |
-| SHA256 | ✅ Full FIPS 180-4 | ✅ 8-way AVX2 | ✅ | ✅ | Fast |
+| MD5 | ✅ Full RFC 1321 | ✅ 8-way AVX2 | ✅ optimized | ✅ | Fast |
+| SHA1 | ✅ Full FIPS 180-4 | — | ✅ optimized | ✅ | Fast |
+| SHA256 | ✅ Full FIPS 180-4 | ✅ 8-way AVX2 | ✅ optimized | ✅ | Fast |
+| SHA384 | ✅ Full FIPS 180-4 | — | ✅ | ✅ | Fast |
 | SHA512 | ✅ Full FIPS 180-4 | — | ✅ | ✅ | Fast |
-| NTLM | ✅ MD4 + UTF-16LE | — | ✅ | — | Fast |
+| NTLM | ✅ MD4 + UTF-16LE | — | ✅ optimized | — | Fast |
 | SHA-3 (256) | ✅ Keccak-f[1600] | — | ✅ | ✅ | Fast |
+| Blake2b | ✅ RFC 7693 | — | — | ✅ | Fast |
+| HMAC-MD5 | ✅ RFC 2104 | — | — | ✅ | Fast |
+| HMAC-SHA256 | ✅ RFC 2104 | — | — | ✅ | Fast |
 | bcrypt | ✅ **libbcrypt** | — | ✅ | ✅ | Slow |
 | scrypt | ✅ Custom | — | ✅ | ✅ | Slow |
 | PBKDF2-HMAC-SHA256 | ✅ RFC 2898 | — | ✅ | ✅ | Slow |
 | Argon2id | ✅ **phc-winner-argon2** | — | ✅ | ✅ | Slow |
 
 > **bcrypt** and **Argon2id** use industry-standard reference libraries (`libbcrypt` and `phc-winner-argon2`) for guaranteed hash compatibility.
+> **BLAKE2b** and **HMAC** engines are pure software implementations per RFC 7693 and RFC 2104.
 
 ---
 
@@ -46,7 +51,8 @@ You may only use Fenrir on:
 | **Rule-Based** | `-a rule` | Applies 32 hashcat-compatible mutation rules to each dictionary word |
 | **Mask / Brute-Force** | `-a mask` | Generates all combinations matching a mask pattern (`?l?l?l?d?d`) |
 | **Hybrid** | `-a hybrid` | Dictionary word + brute-force suffix/prefix combinations |
-| **API Lookup** | `-a api` | Queries online leak databases (LeakLookup, HashKiller) |
+| **Combinator** | `-a combinator` | Combines every word from two wordlists (`word1 + word2`) |
+| **API Lookup** | `-a api` | Queries online leak databases (4 providers) |
 
 ---
 
@@ -55,10 +61,12 @@ You may only use Fenrir on:
 | Feature | Description | Status |
 |---------|-------------|--------|
 | **AVX2 SIMD** | 8-way parallel MD5/SHA256 on CPU (auto-detected) | ✅ |
-| **AVX-512 Detection** | Full XCR0-bits check for AVX-512 readiness | ✅ |
-| **GPU (OpenCL)** | 13 kernel files, async double-buffered pipeline | ✅ |
+| **AVX-512 Detection** | Full XCR0-bits check (bits 1,2,5,6,7) for AVX-512 readiness | ✅ |
+| **GPU (OpenCL)** | 13 kernel files, async double-buffered pipeline with optimized kernels | ✅ |
 | **Async GPU Pipeline** | Double-buffered OpenCL transfers — GPU computes while CPU prepares | ✅ |
 | **Kernel Cache** | Compiled kernels cached in memory with keyed lookup | ✅ |
+| **Built-in Benchmark** | `-b` flag measures all 14 algorithms on CPU & GPU simultaneously | ✅ |
+| **Potfile** | `fenrir.pot` stores previously cracked hashes — auto-loads on startup | ✅ |
 | **Checkpoint/Resume** | Binary checkpoint with CRC32 integrity — survive interruptions | ✅ |
 | **Signal Handling** | Safe SIGINT/SIGTERM with atomic flags — clean shutdown | ✅ |
 | **Thread-Safe I/O** | Mutex-guarded result writing with count tracking | ✅ |
@@ -101,38 +109,50 @@ cmake .. -DFENRIR_ENABLE_ASAN=ON -DCMAKE_BUILD_TYPE=Debug
 ### Usage
 
 ```sh
-# Dictionary attack — MD5
-fenrir -m md5 -a dict -w rockyou.txt -H hashes.txt
+# ── Dictionary Attacks ──────────────────────────────────
+fenrir -m md5      -a dict -w rockyou.txt -H hashes.txt
+fenrir -m sha256   -a dict -w words.txt   -H hashes.txt
+fenrir -m bcrypt   -a dict -w words.txt   -H bcrypt_hashes.txt
+fenrir -m argon2   -a dict -w words.txt   -H argon2_hashes.txt
+fenrir -m blake2b  -a dict -w words.txt   -H blake2b_hashes.txt
 
-# Rule-based attack — SHA1 with rule file
+# ── Rule-Based Attack ───────────────────────────────────
 fenrir -m sha1 -a rule -w words.txt -r rules/OneRuleToRuleThemAll.rule -H hashes.txt
+fenrir -m md5  -a rule -w words.txt -r rules/best64.rule -H hashes.txt
 
-# Mask attack — NTLM 8-char lowercase
-fenrir -m ntlm -a mask -p "?l?l?l?l?l?l?d?d" -H hash.txt
+# ── Mask / Brute-Force ──────────────────────────────────
+fenrir -m ntlm    -a mask -p "?l?l?l?l?l?l?d?d" -H hash.txt
+fenrir -m md5     -a mask -p "?u?l?l?l?l?d?d?s" -H hashes.txt
+fenrir -m sha256  -a mask --charset "abc123" --min-len 4 --max-len 8 -H hashes.txt
 
-# Brute-force with custom charset
-fenrir -m md5 -a mask --charset "abc123" --min-len 4 --max-len 8 -H hashes.txt
-
-# Hybrid — dictionary + numeric suffix
+# ── Hybrid Attack ───────────────────────────────────────
 fenrir -m sha256 -a hybrid -w words.txt --charset "0123456789" --min-len 1 --max-len 3 -H hashes.txt
 
-# SHA-3 cracking
-fenrir -m sha3 -a dict -w words.txt -H hashes.txt
+# ── Combinator Attack ───────────────────────────────────
+fenrir -m md5 -a combinator -w prefixes.txt --wordlist2 suffixes.txt -H hashes.txt
 
-# bcrypt cracking (uses libbcrypt)
-fenrir -m bcrypt -a dict -w words.txt -H bcrypt_hashes.txt
+# ── New Algorithms ──────────────────────────────────────
+fenrir -m sha384      -a dict -w words.txt -H hashes.txt
+fenrir -m hmac-md5    -a dict -w words.txt -H hmac_hashes.txt
+fenrir -m hmac-sha256 -a dict -w words.txt -H hmac_hashes.txt
 
-# Argon2id cracking (uses phc-winner-argon2)
-fenrir -m argon2 -a dict -w words.txt -H argon2_hashes.txt
+# ── API Lookup ──────────────────────────────────────────
+fenrir -m md5 -a api --provider leaklookup --api-key YOUR_KEY -H hashes.txt
+fenrir -m md5 -a api --provider hashtoolkit -H hash.txt
+fenrir -m md5 -a api --provider md5decrypt -H hash.txt
 
-# API lookup — LeakLookup
-fenrir -m md5 -a api --provider leaklookup -H hash.txt
+# ── Benchmark ───────────────────────────────────────────
+fenrir --benchmark                    # All 14 algorithms, CPU + GPU
+fenrir -b --benchmark-count 50000    # Custom count
+fenrir -b --cpu-only                 # CPU only
 
-# CPU-only mode with no SIMD
+# ── Potfile ─────────────────────────────────────────────
+fenrir -m md5 -a dict -w words.txt -H hashes.txt --potfile my_cracked.pot
+# Second run skips already-cracked hashes automatically
+
+# ── Misc ────────────────────────────────────────────────
 fenrir -m sha256 -a dict -w words.txt -H hashes.txt --cpu-only --no-simd
-
-# Resume from checkpoint
-fenrir --resume
+fenrir --resume                       # Resume from last checkpoint
 ```
 
 ### Full Options
@@ -140,20 +160,29 @@ fenrir --resume
 ```
   -h,     --help              Print this help message and exit
   -V,     --version           Display program version information and exit
-  -m,     --mode TEXT         Hash mode: md5, sha1, sha256, sha512, ntlm, bcrypt, scrypt, sha3, pbkdf2, argon2
-  -a,     --attack TEXT       Attack mode: dict, rule, mask, hybrid, api
+  -b,     --benchmark         Run benchmark for all hash algorithms
+          --benchmark-count UINT [100000]  Candidates per algorithm for benchmark
+
+  -m,     --mode TEXT         Hash mode: md5, sha1, sha256, sha384, sha512, ntlm,
+                              bcrypt, scrypt, sha3, pbkdf2, argon2, blake2b,
+                              hmac-md5, hmac-sha256
+  -a,     --attack TEXT       Attack mode: dict, rule, mask, hybrid, combinator, api
+
   -H,     --hashes TEXT ...   Target hash file(s) (can specify multiple)
           --hash TEXT ...     Inline target hash(es)
   -w,     --wordlist TEXT     Dictionary wordlist file path
+          --wordlist2 TEXT    Second wordlist (combinator attack)
   -r,     --rule-file TEXT    Rule file (.rule) path
   -p,     --mask-pattern TEXT Mask pattern (e.g., ?l?l?l?d?d)
           --min-len INT [1]   Minimum password length for brute-force
           --max-len INT [8]   Maximum password length for brute-force
           --charset TEXT      Character set for brute-force
   -1..-4 TEXT                 Custom charset definitions (referenced as ?1..?4 in mask)
-          --provider TEXT     API provider (leaklookup, hashkiller)
+
+          --provider TEXT     API provider: leaklookup, hashkiller, hashtoolkit, md5decrypt
           --api-key TEXT      API key (or set FENRIR_API_KEY env var)
           --no-api-fallback   Disable API fallback when offline exhausted
+
           --cpu-only          Force CPU-only mode (no GPU)
           --no-simd           Disable SIMD (AVX2/AVX-512) CPU acceleration
           --no-async          Disable async GPU double-buffering
@@ -162,8 +191,10 @@ fenrir --resume
           --batch-size UINT   Candidate batch size (0 = auto)
           --checkpoint-interval INT [30]  Checkpoint save interval in seconds
           --resume            Resume from last checkpoint
+
   -c,     --config TEXT       Config file path
   -o,     --output TEXT [cracked.txt]  Output file for cracked passwords
+          --potfile TEXT [fenrir.pot]  Potfile for storing/loading cracked hashes
           --log-file TEXT     Log file path
           --log-level TEXT [info]  Log verbosity: trace, debug, info, warn, error
 ```
@@ -197,13 +228,57 @@ Configuration merges from multiple sources (later overrides earlier):
   "cpu": { "enable_simd": true, "cpu_only": false },
   "api": { "timeout_seconds": 10, "max_retries": 3, "rate_limit_buffer": 1.1 },
   "logging": { "level": "info", "console_colors": true, "file": "" },
-  "output": { "cracked_file": "cracked.txt", "append_mode": false }
+  "output": { "cracked_file": "cracked.txt", "append_mode": false, "potfile": "fenrir.pot" }
 }
 ```
 
-**Environment variables:** `FENRIR_API_KEY`, `FENRIR_BATCH_SIZE`, `FENRIR_GPU_DEVICE`, `FENRIR_CPU_ONLY`, `FENRIR_API_PROVIDER`, `FENRIR_API_TIMEOUT`, `FENRIR_LOG_LEVEL`, `FENRIR_LOG_FILE`, `FENRIR_OUTPUT_FILE`
+**Environment variables:** `FENRIR_API_KEY`, `FENRIR_BATCH_SIZE`, `FENRIR_GPU_DEVICE`, `FENRIR_CPU_ONLY`, `FENRIR_API_PROVIDER`, `FENRIR_API_TIMEOUT`, `FENRIR_LOG_LEVEL`, `FENRIR_LOG_FILE`, `FENRIR_OUTPUT_FILE`, `FENRIR_POTFILE`
 
 **⚠️ Never commit API keys to version control.**
+
+---
+
+## Benchmark Mode
+
+The built-in benchmark (`-b` / `--benchmark`) tests all 14 hash algorithms on both CPU and GPU:
+
+```
+==========================================================
+  FENRIR BENCHMARK RESULTS
+==========================================================
+Algorithm                              CPU                   GPU
+----------------------------------------------------------
+md5                             11.13 MH/s            850.00 MH/s
+sha256                          11.59 MH/s            720.00 MH/s
+sha384                           3.48 MH/s                   N/A
+blake2b                          4.78 MH/s                   N/A
+bcrypt                          28.32 MH/s                   N/A
+argon2                         247.52 MH/s                   N/A
+hmac-sha256                      1.03 MH/s                   N/A
+...
+==========================================================
+```
+
+- CPU benchmarks use SIMD acceleration (AVX2) when available
+- GPU benchmarks are skipped for algorithms without OpenCL kernels (bcrypt, scrypt, blake2b, hmac-*)
+- Use `--benchmark-count` to adjust precision vs speed tradeoff
+- Use `--cpu-only` for CPU-only measurement
+
+---
+
+## Potfile
+
+The potfile (`fenrir.pot` by default, configurable via `--potfile`) stores previously cracked hashes in `hash:password` format:
+
+```
+5d41402abc4b2a76b9719d911017c592:hello
+e99a18c428cb38d5f260853678922e03:abc123
+```
+
+- **On startup**: Loads potfile, marks matching hashes as pre-cracked (skips re-cracking)
+- **On crack**: Appends new `hash:password` entries to the potfile immediately
+- **Format**: Compatible with hashcat `.pot` files — share potfiles between tools
+- **Logging**: Prints `Pre-cracked N hash(es) from potfile` at startup
 
 ---
 
@@ -259,30 +334,32 @@ Characters are frequency-ordered (common letters first) to maximize early-hit pr
 ```
 CLI (CLI11 v2.5.0) → Config (JSON + env + CLI merge)
                               ↓
-                        Pipeline (CPU/GPU dispatch)
-                              ↓
-              ┌───────────────┴───────────────┐
-              ↓                               ↓
-         Attack Layer                    Hash Engines
-    (dict/rule/mask/hybrid/api)    (10 algorithms + SIMD)
-              ↓                               ↓
-    ┌─────────┴─────────┐           ┌─────────┴──────────┐
-    ↓                   ↓           ↓                    ↓
-  GPU (OpenCL)    CPU (AVX2)    Standard Libs      Scalar CPU
-  Async Pipeline  SIMD Engine   (libbcrypt,        Fallback
-  Kernel Cache    8-way MD5     phc-winner-
-  13 .cl kernels  8-way SHA256  argon2)
-         ↓                   ↓           ↓                    ↓
-         └───────────────────┴───────────┴────────────────────┘
-                                    ↓
-                      Compare → ResultWriter → cracked.txt
-                                    ↓
-                      Progress (H/s, ETA) + Checkpoint (CRC32)
+                  ┌───────────┴───────────┐
+                  ↓                       ↓
+            Benchmark Mode           Pipeline (CPU/GPU dispatch)
+            (14 algorithms)               ↓
+                              ┌───────────┴───────────┐
+                              ↓                       ↓
+                         Attack Layer            Hash Engines
+                (dict/rule/mask/hybrid/     (14 algorithms + SIMD)
+                 combinator/api)                  ↓
+                              ↓           ┌─────────┴──────────┐
+                    ┌─────────┴─────┐     ↓                    ↓
+                    ↓               ↓   GPU (OpenCL)    CPU (AVX2)
+              Candidate Gen    Potfile  Async Pipeline  SIMD Engine
+              (batched)        Loader   Kernel Cache    8-way MD5
+                              (auto)    13 .cl kernels  8-way SHA256
+                    ↓               ↓         ↓                    ↓
+                    └───────────────┴─────────┴────────────────────┘
+                                          ↓
+                            Compare → ResultWriter → cracked.txt
+                                          ↓
+                            Progress (H/s, ETA) + Checkpoint (CRC32)
 ```
 
 ### Key Design Patterns
 
-- **Strategy Pattern** — 10 hash algorithms, 5 attack modes, 2 API providers
+- **Strategy Pattern** — 14 hash algorithms, 6 attack modes, 4 API providers
 - **Factory Pattern** — `HashEngineFactory`, `AttackRegistry`, `ApiManager::createProvider()`
 - **RAII** — OpenCL buffer guards, `std::unique_ptr` throughout, exception-safe resource management
 - **FetchContent** — CLI11, nlohmann/json, spdlog, Catch2, libbcrypt, phc-winner-argon2 auto-downloaded
@@ -308,25 +385,40 @@ fenrir-hash-cracker/
 │   ├── bcrypt.cl / scrypt.cl
 │   └── pbkdf2.cl / argon2.cl
 ├── rules/                         # Hashcat-format rule files (5 files)
-│   ├── best64.rule
-│   ├── leetspeak.rule
-│   ├── toggle.rule
-│   ├── combos.rule
-│   └── OneRuleToRuleThemAll.rule
+│   ├── best64.rule                # 79 rules
+│   ├── leetspeak.rule             # 15 rules
+│   ├── toggle.rule                # 15 rules
+│   ├── combos.rule                # 29 rules
+│   └── OneRuleToRuleThemAll.rule  # 127 rules
 ├── cmake/
 │   └── FindOpenCL.cmake           # Custom OpenCL finder (cross-platform)
 ├── src/
 │   ├── main.cpp                   # Entry point — CLI setup, config merge, pipeline launch
-│   ├── core/                      # Hash engines, Config, Pipeline, ResultWriter (16 files)
+│   ├── core/                      # Hash engines, Config, Pipeline, Benchmark, ResultWriter
+│   │   ├── MD5Engine              # Full RFC 1321
+│   │   ├── SHA1Engine             # Full FIPS 180-4
+│   │   ├── SHA256Engine           # Full FIPS 180-4
+│   │   ├── SHA384Engine           # Full FIPS 180-4 (new in v1.1)
+│   │   ├── SHA512Engine           # Full FIPS 180-4
+│   │   ├── NTMLEngine             # MD4 + UTF-16LE
+│   │   ├── SHA3Engine             # Keccak-f[1600]
+│   │   ├── Blake2bEngine          # RFC 7693 (new in v1.1)
+│   │   ├── HMACMD5Engine          # RFC 2104 (new in v1.1)
+│   │   ├── HMACSHA256Engine       # RFC 2104 (new in v1.1)
+│   │   ├── BCryptEngine           # libbcrypt wrapper
+│   │   ├── SCryptEngine           # Custom implementation
+│   │   ├── PBKDF2Engine           # RFC 2898 HMAC-SHA256
+│   │   ├── Argon2Engine           # phc-winner-argon2 wrapper
+│   │   ├── HashEngineFactory      # Creates engines by type or name
+│   │   └── Benchmark              # All-algorithm performance testing
 │   ├── gpu/                       # OpenCL context, kernel, hasher, cache, stats (12 files)
-│   ├── attack/                    # Dictionary, Rule, Mask, Hybrid, API attacks (13 files)
-│   ├── rules/                     # Rule parser and engine — 32 opcodes (5 files)
-│   ├── api/                       # LeakLookup, HashKiller providers, RateLimiter (9 files)
-│   ├── cli/                       # CLI argument parsing wrapper (2 files)
-│   ├── cpu_simd/                  # AVX2 SIMD detectors and engines (6 files)
-│   └── utils/                     # Logger, FileReader, HashParser, Checkpoint, etc. (13 files)
+│   ├── attack/                    # 6 attack modes (new: CombinatorAttack)
+│   ├── rules/                     # Rule parser and engine — 32 opcodes
+│   ├── api/                       # 4 API providers (new: HashToolkit, Md5Decrypt)
+│   ├── cli/                       # CLI argument parsing wrapper
+│   ├── cpu_simd/                  # AVX2 SIMD detectors and engines
+│   └── utils/                     # Logger, FileReader, HashParser, Checkpoint, etc.
 └── tests/                         # Catch2 unit tests (9 test files, 24 test cases)
-    ├── test_main.cpp
     ├── test_hash_engines.cpp       # MD5/SHA1/SHA256/SHA512/NTLM RFC vectors
     ├── test_hash_parser.cpp        # Hash type detection and parsing
     ├── test_rule_parser.cpp        # Rule file parsing
@@ -372,17 +464,33 @@ ctest -C Release
 ```
 
 Test coverage:
-- ✅ **MD5** — RFC 1321 test vectors (5 assertions, including empty, single-char, multi-char)
-- ✅ **SHA1** — FIPS 180-4 test vectors (empty, `"abc"`, long string)
+- ✅ **MD5** — RFC 1321 test vectors (5 assertions)
+- ✅ **SHA1** — FIPS 180-4 test vectors
 - ✅ **SHA256** — FIPS 180-4 test vectors
 - ✅ **SHA512** — FIPS 180-4 test vectors
-- ✅ **NTLM** — Known test vectors (empty, `"password"`, `"hashcat"`)
+- ✅ **NTLM** — Known test vectors
 - ✅ **Rule Parser** — All 32 opcodes parsed
 - ✅ **Rule Engine** — Single and combined rule application
-- ✅ **Mask Generator** — 26×26 lowercase, 10×10×10 digits, uniqueness checks
+- ✅ **Mask Generator** — 26×26 lowercase, 10×10×10 digits, uniqueness
 - ✅ **Checkpoint** — Save/load round-trip with CRC32
 - ✅ **Rate Limiter** — Token bucket consumption
 - ✅ **Pipeline** — End-to-end MD5 crack with dictionary
+
+---
+
+## Changelog
+
+### v1.1.0
+- 🆕 **4 new hash algorithms**: SHA-384, Blake2b, HMAC-MD5, HMAC-SHA256
+- 🆕 **Combinator attack**: `-a combinator --wordlist2` for word1+word2 combinations
+- 🆕 **Benchmark mode**: `-b` / `--benchmark` tests all 14 algorithms on CPU & GPU
+- 🆕 **Potfile support**: `--potfile` stores/loads cracked hashes, hashcat-compatible
+- 🆕 **2 new API providers**: HashToolkit and Md5Decrypt
+- 🚀 **GPU kernel optimizations**: MD5, SHA1, SHA256, NTLM use optimized kernels by default
+- 🔧 **Enhanced AVX-512 detection**: proper XCR0 bits 5,6,7 verification
+
+### v1.0.0
+- Initial release: 10 hash algorithms, 5 attack modes, GPU OpenCL, AVX2 SIMD
 
 ---
 
@@ -404,4 +512,4 @@ MIT License — see [LICENSE](LICENSE) file for details.
 
 **Remember:** With great power comes great responsibility. Use Fenrir ethically and legally.
 
-*Fenrir Hash Cracker v1.0.0 — Built with C++17, OpenCL, AVX2, and ❤️*
+*Fenrir Hash Cracker v1.1.0 — Built with C++17, OpenCL, AVX2, and ❤️*

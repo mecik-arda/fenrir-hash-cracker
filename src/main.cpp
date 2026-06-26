@@ -1,6 +1,7 @@
 #include "core/Config.hpp"
 #include "core/Constants.hpp"
 #include "core/Pipeline.hpp"
+#include "core/Benchmark.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Platform.hpp"
 
@@ -16,7 +17,7 @@ int main(int argc, char** argv) {
     core::Config cliConfig;
 
     app.add_option("-m,--mode", cliConfig.hashMode,
-        "Hash mode: md5, sha1, sha256, sha512, ntlm, bcrypt, scrypt");
+        "Hash mode: md5, sha1, sha256, sha384, sha512, ntlm, bcrypt, scrypt, sha3, pbkdf2, argon2, blake2b, hmac-md5, hmac-sha256");
 
     app.add_option("-a,--attack", cliConfig.attack,
         "Attack mode: dict, rule, mask, hybrid, api");
@@ -29,6 +30,9 @@ int main(int argc, char** argv) {
 
     app.add_option("-w,--wordlist", cliConfig.wordlist,
         "Wordlist file path");
+
+    app.add_option("--wordlist2", cliConfig.wordlist2,
+        "Second wordlist (combinator attack)");
 
     app.add_option("-r,--rule-file", cliConfig.ruleFile,
         "Rule file (.rule) path");
@@ -56,7 +60,7 @@ int main(int argc, char** argv) {
 
 
     app.add_option("--provider", cliConfig.apiProvider,
-        "API provider: leaklookup, hashkiller");
+        "API provider: leaklookup, hashkiller, hashtoolkit, md5decrypt");
 
     app.add_option("--api-key", cliConfig.apiKey,
         "API key (or set FENRIR_API_KEY env var)");
@@ -90,11 +94,20 @@ int main(int argc, char** argv) {
     app.add_flag("--resume", cliConfig.resume,
         "Resume from checkpoint");
 
+    app.add_flag("--benchmark,-b", cliConfig.benchmark,
+        "Run benchmark for all hash algorithms");
+
+    app.add_option("--benchmark-count", cliConfig.benchmarkCount,
+        "Number of candidates for benchmark")->default_val(100000);
+
     app.add_option("-c,--config", cliConfig.configFile,
         "Config file path");
 
     app.add_option("-o,--output", cliConfig.outputFile,
         "Output file for cracked passwords")->default_str("cracked.txt");
+
+    app.add_option("--potfile", cliConfig.potfile,
+        "Potfile for storing/loading cracked hashes")->default_str("fenrir.pot");
 
     app.add_option("--log-file", cliConfig.logFile,
         "Log file path");
@@ -117,6 +130,7 @@ int main(int argc, char** argv) {
     if (app.count("--hashes"))        config.hashFiles    = cliConfig.hashFiles;
     if (app.count("--hash"))          config.inlineHashes = cliConfig.inlineHashes;
     if (app.count("--wordlist"))      config.wordlist     = cliConfig.wordlist;
+    if (app.count("--wordlist2"))     config.wordlist2    = cliConfig.wordlist2;
     if (app.count("--rule-file"))     config.ruleFile     = cliConfig.ruleFile;
     if (app.count("--mask-pattern"))  config.maskPattern  = cliConfig.maskPattern;
     if (app.count("--min-len"))       config.minLength    = cliConfig.minLength;
@@ -137,8 +151,11 @@ int main(int argc, char** argv) {
     if (app.count("--no-async"))      config.asyncPipeline  = cliConfig.asyncPipeline;
     if (app.count("--async-buffers")) config.asyncBuffers   = cliConfig.asyncBuffers;
     if (app.count("--resume"))        config.resume       = cliConfig.resume;
+    if (app.count("--benchmark"))     config.benchmark    = cliConfig.benchmark;
+    if (app.count("--benchmark-count")) config.benchmarkCount = cliConfig.benchmarkCount;
     if (app.count("--config"))        config.configFile   = cliConfig.configFile;
     if (app.count("--output"))        config.outputFile   = cliConfig.outputFile;
+    if (app.count("--potfile"))       config.potfile      = cliConfig.potfile;
     if (app.count("--log-file"))      config.logFile      = cliConfig.logFile;
     if (app.count("--log-level"))     config.logLevel     = cliConfig.logLevel;
 
@@ -161,6 +178,11 @@ int main(int argc, char** argv) {
                         " | CPU cores: " + std::to_string(utils::cpuCoreCount()));
     utils::Logger::info("================================================");
 
+
+    if (config.benchmark) {
+        core::Benchmark::runAll(config);
+        return 0;
+    }
 
     std::vector<std::string> errors;
 
@@ -189,6 +211,11 @@ int main(int argc, char** argv) {
     }
     if (config.attack == "api" && config.apiProvider.empty()) {
         errors.push_back("API provider (--provider) is required for API attack");
+    }
+    if (config.attack == "combinator" || config.attack == "comb") {
+        if (config.wordlist.empty() || config.wordlist2.empty()) {
+            errors.push_back("Both wordlists (-w and --wordlist2) are required for combinator attack");
+        }
     }
 
     if (!errors.empty()) {
@@ -220,6 +247,7 @@ int main(int argc, char** argv) {
     if (!config.apiProvider.empty())
         utils::Logger::info("  API provider: " + config.apiProvider);
     utils::Logger::info("  Output file:  " + config.outputFile);
+    utils::Logger::info("  Potfile:      " + config.potfile);
     utils::Logger::info("  GPU mode:     " + std::string(config.cpuOnly ? "CPU only" : "GPU enabled"));
     utils::Logger::info("================================================");
 
