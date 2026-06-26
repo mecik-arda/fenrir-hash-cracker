@@ -91,6 +91,6 @@ vcpkg_installed/
 conanbuild/
 
 # === Core Dumps ===
-core
+/core
 *.core
 core.*
