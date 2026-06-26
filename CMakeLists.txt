@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(fenrir-hash-cracker
-    VERSION 1.1.0
+    VERSION 1.1.2
     DESCRIPTION "GPU-accelerated password hash auditing tool"
     LANGUAGES CXX C)
 
@@ -114,8 +114,12 @@ add_library(fenrir_utils STATIC
     src/utils/Logger.cpp
     src/utils/FileReader.cpp
     src/utils/HashParser.cpp
+    src/utils/ShadowParser.cpp
+    src/utils/PlistParser.cpp
     src/utils/Checkpoint.cpp
-    src/utils/SignalHandler.cpp)
+    src/utils/SignalHandler.cpp
+    src/ui/Terminal.cpp
+    src/ui/ProgressDisplay.cpp)
 target_include_directories(fenrir_utils PUBLIC src)
 target_link_libraries(fenrir_utils PUBLIC fenrir_core)
 

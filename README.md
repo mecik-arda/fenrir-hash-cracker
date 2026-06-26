@@ -1,8 +1,8 @@
-# 🐺 Fenrir Hash Cracker v1.1.0
+# 🐺 Fenrir Hash Cracker v1.1.2
 
-**GPU-accelerated password hash auditing tool** — C++17 · OpenCL · AVX2/AVX-512 · CLI
+**GPU-accelerated password hash auditing tool** — C++17 · OpenCL · AVX2/AVX-512 · TUI · CLI
 
-Fenrir is a high-performance password strength auditing tool that leverages GPU computing (via OpenCL) and CPU SIMD (AVX2/AVX-512) to crack or verify password hashes. It supports 14 hash algorithms, 6 attack modes, potfile-based resume, built-in benchmarking, and online leak-database API lookups.
+Fenrir is a high-performance password strength auditing tool featuring a live-updating terminal interface (TUI), GPU computing via OpenCL, and CPU SIMD (AVX2/AVX-512). It supports 14 hash algorithms, 6 attack modes, automatic `/etc/shadow` and macOS `.plist` parsing, potfile-based resume, built-in benchmarking, and online leak-database API lookups.
 
 ---
 
@@ -16,6 +16,29 @@ You may only use Fenrir on:
 - Password hash datasets you have legal permission to audit
 
 **Unauthorized use against systems you do not own or have permission to test is illegal.** The authors assume no liability for misuse of this software.
+
+---
+
+## Live TUI (Text User Interface)
+
+Fenrir now features a cross-platform, live-updating terminal interface:
+
+```
++------------------------------------------------------------------+
+| 🐺 Fenrir MD5 · Dictionary · CPU+SIMD                            |
++------------------------------------------------------------------+
+| Progress: 35.2% ########....................................    |
+| Tested: 1,500,000 | Cracked: 3 | Remaining: 2                    |
++------------------------------------------------------------------+
+| Speed: 1.50 GH/s | ETA: 5m 30s | Elapsed: 2m 15s                |
++------------------------------------------------------------------+
+```
+
+- **Progress bar** shows live keyspace completion percentage
+- **Fixed panels** for stats — no scrolling log clutter
+- **Cross-platform**: ANSI escape codes on Linux/macOS, Virtual Terminal on Windows 10+
+- **Console title bar** shows current algorithm and attack mode
+- **Disable with `--no-tui`** to revert to plain text logging
 
 ---
 
@@ -38,8 +61,20 @@ You may only use Fenrir on:
 | PBKDF2-HMAC-SHA256 | ✅ RFC 2898 | — | ✅ | ✅ | Slow |
 | Argon2id | ✅ **phc-winner-argon2** | — | ✅ | ✅ | Slow |
 
-> **bcrypt** and **Argon2id** use industry-standard reference libraries (`libbcrypt` and `phc-winner-argon2`) for guaranteed hash compatibility.
+> **bcrypt** and **Argon2id** use industry-standard reference libraries for guaranteed hash compatibility.
 > **BLAKE2b** and **HMAC** engines are pure software implementations per RFC 7693 and RFC 2104.
+
+### Auto-Detection from System Files
+
+Fenrir can automatically parse hash formats from:
+
+| Source | Format | Auto-Detection |
+|--------|--------|---------------|
+| **`/etc/shadow`** (Linux) | `user:$6$salt$hash:...` | ✅ Username + hash type (`$1$`, `$5$`, `$6$`, `$y$`) |
+| **macOS `.plist`** | PBKDF2-SHA512 in XML plist | ✅ Base64 entropy + salt extraction |
+| **Standard hash files** | `hash:password` or `hash` per line | ✅ Hex length or `$id$` prefix |
+
+Simply pass the file via `-H` and Fenrir detects the format automatically — no manual preprocessing needed.
 
 ---
 
@@ -60,16 +95,19 @@ You may only use Fenrir on:
 
 | Feature | Description | Status |
 |---------|-------------|--------|
+| **Live TUI** | Cross-platform live-updating terminal with progress bar | ✅ |
 | **AVX2 SIMD** | 8-way parallel MD5/SHA256 on CPU (auto-detected) | ✅ |
-| **AVX-512 Detection** | Full XCR0-bits check (bits 1,2,5,6,7) for AVX-512 readiness | ✅ |
-| **GPU (OpenCL)** | 13 kernel files, async double-buffered pipeline with optimized kernels | ✅ |
-| **Async GPU Pipeline** | Double-buffered OpenCL transfers — GPU computes while CPU prepares | ✅ |
-| **Kernel Cache** | Compiled kernels cached in memory with keyed lookup | ✅ |
-| **Built-in Benchmark** | `-b` flag measures all 14 algorithms on CPU & GPU simultaneously | ✅ |
-| **Potfile** | `fenrir.pot` stores previously cracked hashes — auto-loads on startup | ✅ |
-| **Checkpoint/Resume** | Binary checkpoint with CRC32 integrity — survive interruptions | ✅ |
-| **Signal Handling** | Safe SIGINT/SIGTERM with atomic flags — clean shutdown | ✅ |
-| **Thread-Safe I/O** | Mutex-guarded result writing with count tracking | ✅ |
+| **AVX-512 Detection** | Full XCR0-bits check (bits 1,2,5,6,7) | ✅ |
+| **GPU (OpenCL)** | 13 kernel files, async double-buffered pipeline | ✅ |
+| **Async GPU Pipeline** | Double-buffered OpenCL transfers | ✅ |
+| **Kernel Cache** | Compiled kernels cached in memory | ✅ |
+| **Built-in Benchmark** | `-b` tests all 14 algorithms on CPU & GPU | ✅ |
+| **Shadow Parser** | Auto-parse `/etc/shadow` with username + hash type | ✅ |
+| **Plist Parser** | Auto-parse macOS `.plist` PBKDF2 hashes | ✅ |
+| **Potfile** | `fenrir.pot` — hashcat-compatible, auto-load/save | ✅ |
+| **Checkpoint/Resume** | Binary checkpoint with CRC32 integrity | ✅ |
+| **Signal Handling** | Safe SIGINT/SIGTERM with atomic flags | ✅ |
+| **Thread-Safe I/O** | Mutex-guarded result writing | ✅ |
 
 ---
 
@@ -91,7 +129,7 @@ You may only use Fenrir on:
 git clone https://github.com/your-org/fenrir-hash-cracker.git
 cd fenrir-hash-cracker
 
-# Standard build (CPU + GPU + API)
+# Standard build (CPU + GPU + API + TUI)
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build . --config Release --parallel
@@ -101,9 +139,6 @@ cmake .. -DFENRIR_USE_OPENCL=OFF -DCMAKE_BUILD_TYPE=Release
 
 # With unit tests
 cmake .. -DFENRIR_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
-
-# With AddressSanitizer (debug)
-cmake .. -DFENRIR_ENABLE_ASAN=ON -DCMAKE_BUILD_TYPE=Debug
 ```
 
 ### Usage
@@ -113,46 +148,44 @@ cmake .. -DFENRIR_ENABLE_ASAN=ON -DCMAKE_BUILD_TYPE=Debug
 fenrir -m md5      -a dict -w rockyou.txt -H hashes.txt
 fenrir -m sha256   -a dict -w words.txt   -H hashes.txt
 fenrir -m bcrypt   -a dict -w words.txt   -H bcrypt_hashes.txt
-fenrir -m argon2   -a dict -w words.txt   -H argon2_hashes.txt
-fenrir -m blake2b  -a dict -w words.txt   -H blake2b_hashes.txt
+
+# ── Auto-detect from /etc/shadow ────────────────────────
+fenrir -m sha512 -a dict -w rockyou.txt -H /etc/shadow
+# Output: "CRACKED: root -> password123" (with username!)
+
+# ── Auto-detect from macOS .plist ───────────────────────
+fenrir -m pbkdf2 -a dict -w words.txt -H /var/db/dslocal/nodes/Default/users/john.plist
 
 # ── Rule-Based Attack ───────────────────────────────────
 fenrir -m sha1 -a rule -w words.txt -r rules/OneRuleToRuleThemAll.rule -H hashes.txt
-fenrir -m md5  -a rule -w words.txt -r rules/best64.rule -H hashes.txt
 
 # ── Mask / Brute-Force ──────────────────────────────────
 fenrir -m ntlm    -a mask -p "?l?l?l?l?l?l?d?d" -H hash.txt
-fenrir -m md5     -a mask -p "?u?l?l?l?l?d?d?s" -H hashes.txt
 fenrir -m sha256  -a mask --charset "abc123" --min-len 4 --max-len 8 -H hashes.txt
-
-# ── Hybrid Attack ───────────────────────────────────────
-fenrir -m sha256 -a hybrid -w words.txt --charset "0123456789" --min-len 1 --max-len 3 -H hashes.txt
 
 # ── Combinator Attack ───────────────────────────────────
 fenrir -m md5 -a combinator -w prefixes.txt --wordlist2 suffixes.txt -H hashes.txt
 
 # ── New Algorithms ──────────────────────────────────────
 fenrir -m sha384      -a dict -w words.txt -H hashes.txt
-fenrir -m hmac-md5    -a dict -w words.txt -H hmac_hashes.txt
-fenrir -m hmac-sha256 -a dict -w words.txt -H hmac_hashes.txt
+fenrir -m blake2b     -a dict -w words.txt -H hashes.txt
+fenrir -m hmac-sha256 -a dict -w words.txt -H hashes.txt
 
 # ── API Lookup ──────────────────────────────────────────
-fenrir -m md5 -a api --provider leaklookup --api-key YOUR_KEY -H hashes.txt
-fenrir -m md5 -a api --provider hashtoolkit -H hash.txt
-fenrir -m md5 -a api --provider md5decrypt -H hash.txt
+fenrir -m md5 -a api --provider leaklookup --api-key KEY -H hashes.txt
 
 # ── Benchmark ───────────────────────────────────────────
-fenrir --benchmark                    # All 14 algorithms, CPU + GPU
-fenrir -b --benchmark-count 50000    # Custom count
-fenrir -b --cpu-only                 # CPU only
+fenrir --benchmark                  # All 14 algorithms on CPU + GPU
+fenrir -b --benchmark-count 50000  # Custom count
+fenrir -b --cpu-only               # CPU only
 
 # ── Potfile ─────────────────────────────────────────────
-fenrir -m md5 -a dict -w words.txt -H hashes.txt --potfile my_cracked.pot
-# Second run skips already-cracked hashes automatically
+fenrir -m md5 -a dict -w words.txt -H hashes.txt --potfile cracked.pot
 
-# ── Misc ────────────────────────────────────────────────
+# ── TUI & Misc ──────────────────────────────────────────
+fenrir -m sha256 -a dict -w words.txt -H hashes.txt           # TUI enabled by default
+fenrir -m sha256 -a dict -w words.txt -H hashes.txt --no-tui  # Plain text mode
 fenrir -m sha256 -a dict -w words.txt -H hashes.txt --cpu-only --no-simd
-fenrir --resume                       # Resume from last checkpoint
 ```
 
 ### Full Options
@@ -168,7 +201,7 @@ fenrir --resume                       # Resume from last checkpoint
                               hmac-md5, hmac-sha256
   -a,     --attack TEXT       Attack mode: dict, rule, mask, hybrid, combinator, api
 
-  -H,     --hashes TEXT ...   Target hash file(s) (can specify multiple)
+  -H,     --hashes TEXT ...   Target hash file(s) — auto-detects shadow/plist format
           --hash TEXT ...     Inline target hash(es)
   -w,     --wordlist TEXT     Dictionary wordlist file path
           --wordlist2 TEXT    Second wordlist (combinator attack)
@@ -177,12 +210,13 @@ fenrir --resume                       # Resume from last checkpoint
           --min-len INT [1]   Minimum password length for brute-force
           --max-len INT [8]   Maximum password length for brute-force
           --charset TEXT      Character set for brute-force
-  -1..-4 TEXT                 Custom charset definitions (referenced as ?1..?4 in mask)
+  -1..-4 TEXT                 Custom charset definitions
 
           --provider TEXT     API provider: leaklookup, hashkiller, hashtoolkit, md5decrypt
           --api-key TEXT      API key (or set FENRIR_API_KEY env var)
-          --no-api-fallback   Disable API fallback when offline exhausted
+          --no-api-fallback   Disable API fallback
 
+          --no-tui            Disable live TUI progress (plain log output)
           --cpu-only          Force CPU-only mode (no GPU)
           --no-simd           Disable SIMD (AVX2/AVX-512) CPU acceleration
           --no-async          Disable async GPU double-buffering
@@ -208,124 +242,10 @@ Configuration merges from multiple sources (later overrides earlier):
 1. `config/default_config.json` — bundled default configuration
 2. `%APPDATA%/.fenrir/config.json` (Windows) or `~/.fenrir/config.json` (Linux/macOS)
 3. `./fenrir.json` — project-local configuration
-4. Environment variables (`FENRIR_API_KEY`, `FENRIR_BATCH_SIZE`, `FENRIR_CPU_ONLY`, etc.)
+4. Environment variables (`FENRIR_API_KEY`, `FENRIR_POTFILE`, etc.)
 5. CLI arguments (highest priority)
 
-### Default Configuration
-
-```json
-{
-  "batch": { "fast_hash_size": 1000000, "slow_hash_size": 1024, "api_size": 100 },
-  "checkpoint": { "interval_seconds": 30, "file": "fenrir.checkpoint" },
-  "gpu": {
-    "default_device": 0,
-    "work_group_auto_tune": true,
-    "kernel_cache_dir": ".fenrir_kernel_cache",
-    "async_pipeline": true,
-    "async_buffers": 2,
-    "cpu_only": false
-  },
-  "cpu": { "enable_simd": true, "cpu_only": false },
-  "api": { "timeout_seconds": 10, "max_retries": 3, "rate_limit_buffer": 1.1 },
-  "logging": { "level": "info", "console_colors": true, "file": "" },
-  "output": { "cracked_file": "cracked.txt", "append_mode": false, "potfile": "fenrir.pot" }
-}
-```
-
-**Environment variables:** `FENRIR_API_KEY`, `FENRIR_BATCH_SIZE`, `FENRIR_GPU_DEVICE`, `FENRIR_CPU_ONLY`, `FENRIR_API_PROVIDER`, `FENRIR_API_TIMEOUT`, `FENRIR_LOG_LEVEL`, `FENRIR_LOG_FILE`, `FENRIR_OUTPUT_FILE`, `FENRIR_POTFILE`
-
 **⚠️ Never commit API keys to version control.**
-
----
-
-## Benchmark Mode
-
-The built-in benchmark (`-b` / `--benchmark`) tests all 14 hash algorithms on both CPU and GPU:
-
-```
-==========================================================
-  FENRIR BENCHMARK RESULTS
-==========================================================
-Algorithm                              CPU                   GPU
-----------------------------------------------------------
-md5                             11.13 MH/s            850.00 MH/s
-sha256                          11.59 MH/s            720.00 MH/s
-sha384                           3.48 MH/s                   N/A
-blake2b                          4.78 MH/s                   N/A
-bcrypt                          28.32 MH/s                   N/A
-argon2                         247.52 MH/s                   N/A
-hmac-sha256                      1.03 MH/s                   N/A
-...
-==========================================================
-```
-
-- CPU benchmarks use SIMD acceleration (AVX2) when available
-- GPU benchmarks are skipped for algorithms without OpenCL kernels (bcrypt, scrypt, blake2b, hmac-*)
-- Use `--benchmark-count` to adjust precision vs speed tradeoff
-- Use `--cpu-only` for CPU-only measurement
-
----
-
-## Potfile
-
-The potfile (`fenrir.pot` by default, configurable via `--potfile`) stores previously cracked hashes in `hash:password` format:
-
-```
-5d41402abc4b2a76b9719d911017c592:hello
-e99a18c428cb38d5f260853678922e03:abc123
-```
-
-- **On startup**: Loads potfile, marks matching hashes as pre-cracked (skips re-cracking)
-- **On crack**: Appends new `hash:password` entries to the potfile immediately
-- **Format**: Compatible with hashcat `.pot` files — share potfiles between tools
-- **Logging**: Prints `Pre-cracked N hash(es) from potfile` at startup
-
----
-
-## Rule Engine
-
-Fenrir supports 32 hashcat-compatible mutation rules:
-
-| Category | Opcodes | Description |
-|----------|---------|-------------|
-| Case | `l` `u` `c` `C` `t` `T` | Lowercase, uppercase, capitalize, invert, toggle, toggle-at |
-| Insert/Delete | `$X` `^X` `iNX` `D` `oNX` | Append, prepend, insert, delete, overwrite |
-| Substitution | `sXY` `@X` | Replace and purge |
-| Duplication | `d` `pN` `f` | Double, repeat-N, reflect |
-| Rotation | `{` `}` `k` `K` | Left, right, swap-first-two, swap-last-two |
-| Extraction | `xNM` `ONM` `'N` | Extract, omit, truncate |
-| Memory | `M` `4` `6` | Memorize, append-memory, prepend-memory |
-| Rejection | `<N` `>N` `!X` `/X` | Reject len>N, len<N, contains-X, not-contains-X |
-| Increment | `+N` `-N` | Increment/decrement char at position N |
-
-**Bundled rule files:**
-
-| File | Rules | Description |
-|------|-------|-------------|
-| `rules/best64.rule` | 79 | Top 64 most effective mutation rules |
-| `rules/leetspeak.rule` | 15 | Leetspeak substitutions (`a→@`, `e→3`, `s→$`...) |
-| `rules/toggle.rule` | 15 | Case toggling variations |
-| `rules/combos.rule` | 29 | Common digit/symbol character combinations |
-| `rules/OneRuleToRuleThemAll.rule` | 127 | Comprehensive 90+ rule set |
-
----
-
-## Mask Attack Syntax
-
-| Placeholder | Character Set | Size |
-|-------------|--------------|------|
-| `?l` | a–z | 26 |
-| `?u` | A–Z | 26 |
-| `?d` | 0–9 | 10 |
-| `?s` | Special chars | 33 |
-| `?a` | `?l` + `?u` + `?d` + `?s` | 95 |
-| `?h` | 0–9, a–f | 16 |
-| `?H` | 0–9, A–F | 16 |
-| `?b` | All 256 bytes | 256 |
-
-Custom charsets via `-1` through `-4` are referenced as `?1`, `?2`, `?3`, `?4`.
-
-Characters are frequency-ordered (common letters first) to maximize early-hit probability during cracking.
 
 ---
 
@@ -336,35 +256,30 @@ CLI (CLI11 v2.5.0) → Config (JSON + env + CLI merge)
                               ↓
                   ┌───────────┴───────────┐
                   ↓                       ↓
-            Benchmark Mode           Pipeline (CPU/GPU dispatch)
-            (14 algorithms)               ↓
-                              ┌───────────┴───────────┐
-                              ↓                       ↓
-                         Attack Layer            Hash Engines
-                (dict/rule/mask/hybrid/     (14 algorithms + SIMD)
-                 combinator/api)                  ↓
-                              ↓           ┌─────────┴──────────┐
-                    ┌─────────┴─────┐     ↓                    ↓
-                    ↓               ↓   GPU (OpenCL)    CPU (AVX2)
-              Candidate Gen    Potfile  Async Pipeline  SIMD Engine
-              (batched)        Loader   Kernel Cache    8-way MD5
-                              (auto)    13 .cl kernels  8-way SHA256
-                    ↓               ↓         ↓                    ↓
-                    └───────────────┴─────────┴────────────────────┘
-                                          ↓
-                            Compare → ResultWriter → cracked.txt
-                                          ↓
-                            Progress (H/s, ETA) + Checkpoint (CRC32)
+          ┌── Benchmark Mode         Pipeline (CPU/GPU dispatch)
+          │   (14 algorithms)             ↓
+          │                    ┌──────────┴──────────┐
+          │                    ↓                     ↓
+          │              Auto-Detect            Attack Layer
+          │         (/etc/shadow, .plist,    (dict/rule/mask/
+          │           standard hashes)        hybrid/combinator/api)
+          │                    ↓                     ↓
+          │              Hash Engines          Candidate Gen
+          │           (14 algos + SIMD)        (batched I/O)
+          │                    ↓
+          │         ┌──────────┴──────────┐
+          │         ↓                     ↓
+          │    GPU (OpenCL)          CPU (AVX2)
+          │    Async Pipeline         SIMD Engine
+          │    Kernel Cache           8-way MD5/SHA256
+          │         ↓                     ↓
+          │         └──────────┬──────────┘
+          │                    ↓
+          └──────────→  Compare + ResultWriter
+                              ↓
+                    Live TUI (ProgressDisplay)
+                    + Potfile + Checkpoint (CRC32)
 ```
-
-### Key Design Patterns
-
-- **Strategy Pattern** — 14 hash algorithms, 6 attack modes, 4 API providers
-- **Factory Pattern** — `HashEngineFactory`, `AttackRegistry`, `ApiManager::createProvider()`
-- **RAII** — OpenCL buffer guards, `std::unique_ptr` throughout, exception-safe resource management
-- **FetchContent** — CLI11, nlohmann/json, spdlog, Catch2, libbcrypt, phc-winner-argon2 auto-downloaded
-- **Idempotent Init** — Logger supports re-initialization, SignalHandler supports re-install
-- **Atomic Signal Handling** — Signal handlers only set atomic flags; callbacks polled at safe points
 
 ---
 
@@ -372,61 +287,25 @@ CLI (CLI11 v2.5.0) → Config (JSON + env + CLI merge)
 
 ```
 fenrir-hash-cracker/
-├── CMakeLists.txt                 # Build system (FetchContent deps)
-├── README.md                      # This file
-├── LICENSE                        # MIT License
-├── config/
-│   └── default_config.json        # Bundled default configuration
-├── kernels/                       # OpenCL .cl kernel files (13 files)
-│   ├── common.cl                  # Shared macros (ROT, MD5_F/G/H/I, SHA_CH/MAJ...)
-│   ├── md5.cl / md5_optimized.cl
-│   ├── sha1.cl / sha256.cl / sha512.cl / sha3.cl
-│   ├── ntlm.cl / ntlm_optimized.cl
-│   ├── bcrypt.cl / scrypt.cl
-│   └── pbkdf2.cl / argon2.cl
-├── rules/                         # Hashcat-format rule files (5 files)
-│   ├── best64.rule                # 79 rules
-│   ├── leetspeak.rule             # 15 rules
-│   ├── toggle.rule                # 15 rules
-│   ├── combos.rule                # 29 rules
-│   └── OneRuleToRuleThemAll.rule  # 127 rules
-├── cmake/
-│   └── FindOpenCL.cmake           # Custom OpenCL finder (cross-platform)
+├── CMakeLists.txt
+├── README.md
+├── config/default_config.json
+├── kernels/                       # 13 OpenCL .cl files
+├── rules/                         # 5 hashcat rule files
+├── cmake/FindOpenCL.cmake
 ├── src/
-│   ├── main.cpp                   # Entry point — CLI setup, config merge, pipeline launch
-│   ├── core/                      # Hash engines, Config, Pipeline, Benchmark, ResultWriter
-│   │   ├── MD5Engine              # Full RFC 1321
-│   │   ├── SHA1Engine             # Full FIPS 180-4
-│   │   ├── SHA256Engine           # Full FIPS 180-4
-│   │   ├── SHA384Engine           # Full FIPS 180-4 (new in v1.1)
-│   │   ├── SHA512Engine           # Full FIPS 180-4
-│   │   ├── NTMLEngine             # MD4 + UTF-16LE
-│   │   ├── SHA3Engine             # Keccak-f[1600]
-│   │   ├── Blake2bEngine          # RFC 7693 (new in v1.1)
-│   │   ├── HMACMD5Engine          # RFC 2104 (new in v1.1)
-│   │   ├── HMACSHA256Engine       # RFC 2104 (new in v1.1)
-│   │   ├── BCryptEngine           # libbcrypt wrapper
-│   │   ├── SCryptEngine           # Custom implementation
-│   │   ├── PBKDF2Engine           # RFC 2898 HMAC-SHA256
-│   │   ├── Argon2Engine           # phc-winner-argon2 wrapper
-│   │   ├── HashEngineFactory      # Creates engines by type or name
-│   │   └── Benchmark              # All-algorithm performance testing
-│   ├── gpu/                       # OpenCL context, kernel, hasher, cache, stats (12 files)
-│   ├── attack/                    # 6 attack modes (new: CombinatorAttack)
-│   ├── rules/                     # Rule parser and engine — 32 opcodes
-│   ├── api/                       # 4 API providers (new: HashToolkit, Md5Decrypt)
-│   ├── cli/                       # CLI argument parsing wrapper
+│   ├── main.cpp
+│   ├── core/                      # 14 hash engines, Pipeline, Benchmark, Config
+│   ├── gpu/                       # OpenCL context, kernel, hasher, cache, stats
+│   ├── attack/                    # 6 attack modes
+│   ├── rules/                     # 32 opcode rule engine
+│   ├── api/                       # 4 API providers
+│   ├── ui/                        # TUI: Terminal + ProgressDisplay
+│   ├── cli/                       # CLI parser wrapper
 │   ├── cpu_simd/                  # AVX2 SIMD detectors and engines
-│   └── utils/                     # Logger, FileReader, HashParser, Checkpoint, etc.
-└── tests/                         # Catch2 unit tests (9 test files, 24 test cases)
-    ├── test_hash_engines.cpp       # MD5/SHA1/SHA256/SHA512/NTLM RFC vectors
-    ├── test_hash_parser.cpp        # Hash type detection and parsing
-    ├── test_rule_parser.cpp        # Rule file parsing
-    ├── test_rule_engine.cpp        # Rule application and opcodes
-    ├── test_mask_generator.cpp     # Mask/brute-force generation
-    ├── test_checkpoint.cpp         # Checkpoint save/load round-trip
-    ├── test_api_manager.cpp        # API provider creation and query
-    └── test_pipeline.cpp           # End-to-end pipeline with known hash
+│   └── utils/                     # Logger, FileReader, HashParser, ShadowParser,
+│                                  #   PlistParser, Checkpoint, SignalHandler, Timer
+└── tests/                         # 9 test files, 24 test cases
 ```
 
 ---
@@ -437,8 +316,8 @@ fenrir-hash-cracker/
 |---------|---------|--------|---------|
 | CLI11 | v2.5.0 | FetchContent | CLI argument parsing |
 | nlohmann/json | v3.11.3 | FetchContent | JSON config parsing |
-| spdlog | v1.15.3 | FetchContent | Logging (console + file) |
-| Catch2 | v3.7.1 | FetchContent | Unit testing framework |
+| spdlog | v1.15.3 | FetchContent | Logging |
+| Catch2 | v3.7.1 | FetchContent | Unit testing |
 | **libbcrypt** | master | FetchContent | bcrypt hash computation |
 | **phc-winner-argon2** | master | FetchContent | Argon2id hash verification |
 | OpenCL | System | find_package | GPU acceleration |
@@ -449,45 +328,28 @@ fenrir-hash-cracker/
 ## Testing
 
 ```sh
-# Build with tests
 cmake .. -DFENRIR_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build . --config Release
-
-# Run all 24 tests
-ctest -C Release
-
-# Run specific test
-./tests/Release/fenrir_tests.exe "MD5 RFC 1321 test vectors"
-
-# Run with verbose output
-./tests/Release/fenrir_tests.exe -s
+ctest -C Release                           # 24 tests
+./tests/Release/fenrir_tests.exe -s        # Verbose output
 ```
-
-Test coverage:
-- ✅ **MD5** — RFC 1321 test vectors (5 assertions)
-- ✅ **SHA1** — FIPS 180-4 test vectors
-- ✅ **SHA256** — FIPS 180-4 test vectors
-- ✅ **SHA512** — FIPS 180-4 test vectors
-- ✅ **NTLM** — Known test vectors
-- ✅ **Rule Parser** — All 32 opcodes parsed
-- ✅ **Rule Engine** — Single and combined rule application
-- ✅ **Mask Generator** — 26×26 lowercase, 10×10×10 digits, uniqueness
-- ✅ **Checkpoint** — Save/load round-trip with CRC32
-- ✅ **Rate Limiter** — Token bucket consumption
-- ✅ **Pipeline** — End-to-end MD5 crack with dictionary
 
 ---
 
 ## Changelog
 
+### v1.1.2
+- 🆕 **Live TUI**: Cross-platform terminal interface with progress bar, fixed stat panels
+- 🆕 **`/etc/shadow` parser**: Auto-detect username + hash type from Linux shadow files
+- 🆕 **macOS `.plist` parser**: Extract PBKDF2-SHA512 hashes from macOS user plists
+- 🆕 **Username tracking**: Cracked output shows `username -> password` for shadow/plist sources
+- 🆕 **`--no-tui` flag**: Disable TUI for scripting/headless use
+
 ### v1.1.0
-- 🆕 **4 new hash algorithms**: SHA-384, Blake2b, HMAC-MD5, HMAC-SHA256
-- 🆕 **Combinator attack**: `-a combinator --wordlist2` for word1+word2 combinations
-- 🆕 **Benchmark mode**: `-b` / `--benchmark` tests all 14 algorithms on CPU & GPU
-- 🆕 **Potfile support**: `--potfile` stores/loads cracked hashes, hashcat-compatible
-- 🆕 **2 new API providers**: HashToolkit and Md5Decrypt
-- 🚀 **GPU kernel optimizations**: MD5, SHA1, SHA256, NTLM use optimized kernels by default
-- 🔧 **Enhanced AVX-512 detection**: proper XCR0 bits 5,6,7 verification
+- 🆕 4 new hash algorithms: SHA-384, Blake2b, HMAC-MD5, HMAC-SHA256
+- 🆕 Combinator attack, Benchmark mode, Potfile support
+- 🆕 2 new API providers: HashToolkit, Md5Decrypt
+- 🚀 GPU kernel optimizations for MD5, SHA1, SHA256, NTLM
 
 ### v1.0.0
 - Initial release: 10 hash algorithms, 5 attack modes, GPU OpenCL, AVX2 SIMD
@@ -500,16 +362,6 @@ MIT License — see [LICENSE](LICENSE) file for details.
 
 ---
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
 **Remember:** With great power comes great responsibility. Use Fenrir ethically and legally.
 
-*Fenrir Hash Cracker v1.1.0 — Built with C++17, OpenCL, AVX2, and ❤️*
+*Fenrir Hash Cracker v1.1.2 — Built with C++17, OpenCL, AVX2, TUI, and ❤️*

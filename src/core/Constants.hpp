@@ -7,8 +7,8 @@
 namespace fenrir {
 namespace core {
 
-constexpr const char* VERSION        = "1.1.0";
-constexpr const char* VERSION_STRING = "Fenrir Hash Cracker v1.1.0";
+constexpr const char* VERSION        = "1.1.2";
+constexpr const char* VERSION_STRING = "Fenrir Hash Cracker v1.1.2";
 constexpr const char* AUTHOR         = "Fenrir Project";
 constexpr const char* DESCRIPTION    = "GPU-accelerated password hash auditing tool";
 

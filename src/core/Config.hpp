@@ -71,6 +71,7 @@ struct Config {
     bool   showHelp    = false;
     bool   benchmark   = false;
     uint64_t benchmarkCount = 100'000;
+    bool   noTui       = false;
     std::string configFile;
 
 

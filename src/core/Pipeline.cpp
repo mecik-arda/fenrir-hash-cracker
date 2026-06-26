@@ -4,6 +4,8 @@
 #include "../attack/AttackRegistry.hpp"
 #include "../utils/Logger.hpp"
 #include "../utils/HashParser.hpp"
+#include "../utils/ShadowParser.hpp"
+#include "../utils/PlistParser.hpp"
 #include "../utils/Checkpoint.hpp"
 #include "../utils/SignalHandler.hpp"
 #include "../utils/Timer.hpp"
@@ -44,6 +46,7 @@ namespace fenrir { namespace api {
 }}
 #endif
 #include "../cpu_simd/SIMDDetector.hpp"
+#include "../ui/ProgressDisplay.hpp"
 
 #include <sstream>
 #include <iomanip>
@@ -88,11 +91,42 @@ int Pipeline::run() {
     m_targets.clear();
     auto algo = m_engine->type();
     for (const auto& file : m_config.hashFiles) {
-        auto parsed = utils::HashParser::parseFile(file, algo);
-        m_targets.insert(m_targets.end(), parsed.begin(), parsed.end());
+        // Try shadow format first, fall back to standard hash file
+        auto shadowEntries = utils::ShadowParser::parseFile(file);
+        if (!shadowEntries.empty()) {
+            for (const auto& se : shadowEntries) {
+                std::string detectedMode = utils::ShadowParser::detectHashMode(se.hashString);
+                if (!detectedMode.empty() && m_config.hashMode.empty()) {
+                    // Auto-detect: override engine to match shadow hash type
+                    utils::Logger::info("Shadow detected: " + se.username +
+                                       " -> " + detectedMode + " hash");
+                }
+                // Use the hash string directly — HashParser handles $id$ prefixed hashes
+                auto target = utils::HashParser::parse(se.hashString, algo);
+                target.username = se.username;
+                m_targets.push_back(target);
+            }
+        } else {
+            // Try plist format
+            auto plistEntries = utils::PlistParser::parseFile(file);
+            if (!plistEntries.empty()) {
+                for (const auto& pe : plistEntries) {
+                    auto target = utils::HashParser::parse(pe.hashString, algo);
+                    target.username = pe.username;
+                    m_targets.push_back(target);
+                }
+            } else {
+                auto parsed = utils::HashParser::parseFile(file, algo);
+                m_targets.insert(m_targets.end(), parsed.begin(), parsed.end());
+            }
+        }
     }
     for (const auto& h : m_config.inlineHashes) {
-        m_targets.push_back(utils::HashParser::parse(h, algo));
+        auto t = utils::HashParser::parse(h, algo);
+        // Check if inline hash looks like a shadow entry
+        auto se = utils::ShadowParser::parseLine(h);
+        if (se) { t.username = se->username; }
+        m_targets.push_back(t);
     }
 
     if (m_targets.empty()) {
@@ -176,10 +210,20 @@ int Pipeline::run() {
     ResultWriter writer(m_config.outputFile, m_config.outputAppend);
     std::ofstream potStream(m_config.potfile, std::ios::app);
 
+    // TUI progress display
+    std::unique_ptr<ui::ProgressDisplay> tui;
+    if (!m_config.noTui) {
+        std::string engineInfo = m_config.cpuOnly ? "CPU" : "GPU";
+        if (m_config.enableSIMD) engineInfo += "+SIMD";
+        tui = std::make_unique<ui::ProgressDisplay>(
+            m_engine->name(), attack->name(), engineInfo, attack->totalCandidateEstimate());
+    }
+
     gpu::GpuStats stats;
     utils::Timer timer;
     auto lastCheckpoint = timer.elapsed();
     bool interrupted = false;
+    auto lastTuiUpdate = timer.elapsed();
 
 
     utils::SignalHandler::install([&]() {
@@ -200,7 +244,7 @@ int Pipeline::run() {
         : m_config.fastHashBatchSize;
 
     uint64_t totalEstimate = attack->totalCandidateEstimate();
-    if (totalEstimate > 0) {
+    if (totalEstimate > 0 && m_config.noTui) {
         utils::Logger::info("Estimated keyspace: " + std::to_string(totalEstimate));
     }
 
@@ -260,7 +304,9 @@ int Pipeline::run() {
                         if (!t->cracked) {
                             t->cracked = true;
                             writer.write(t->hex(), candidate);
-                            utils::Logger::info("CRACKED: " + t->hex() + " -> " + candidate);
+                            std::string display = t->username.empty() ? t->hex() : t->username;
+                            utils::Logger::info("CRACKED: " + display + " -> " + candidate);
+                            if (tui) tui->onCrack(display, candidate);
                             if (potStream.is_open()) { potStream << t->hex() << ":" << candidate << "\n"; potStream.flush(); }
                             m_cracked++;
                             hashMap.erase(it);
@@ -283,7 +329,9 @@ int Pipeline::run() {
                         if (!t->cracked) {
                             t->cracked = true;
                             writer.write(t->hex(), candidate);
-                            utils::Logger::info("CRACKED: " + t->hex() + " -> " + candidate);
+                            std::string display = t->username.empty() ? t->hex() : t->username;
+                            utils::Logger::info("CRACKED: " + display + " -> " + candidate);
+                            if (tui) tui->onCrack(display, candidate);
                             if (potStream.is_open()) { potStream << t->hex() << ":" << candidate << "\n"; potStream.flush(); }
                             m_cracked++;
                             hashMap.erase(it);
@@ -309,14 +357,25 @@ int Pipeline::run() {
                 ? totalEstimate - m_attempts
                 : rem * (m_attempts / std::max(uint64_t(1), m_cracked + 1));
 
-            std::ostringstream progress;
-            progress << "\r[" << timer.elapsedFormatted() << "] "
-                     << stats.hashRateFormatted() << " | "
-                     << m_attempts << " tested | "
-                     << m_cracked << " cracked | "
-                     << rem << " remaining | ETA: "
-                     << stats.etaFormatted(remainingEstimate);
-            utils::Logger::info(progress.str());
+            if (tui) {
+                // Live TUI update
+                uint64_t remainingEstimate = totalEstimate > 0
+                    ? totalEstimate - m_attempts
+                    : rem * (m_attempts / std::max(uint64_t(1), m_cracked + 1));
+                tui->update(m_attempts, m_cracked, rem,
+                           stats.hashRateFormatted(),
+                           stats.etaFormatted(remainingEstimate),
+                           timer.elapsedFormatted());
+            } else {
+                std::ostringstream progress;
+                progress << "\r[" << timer.elapsedFormatted() << "] "
+                         << stats.hashRateFormatted() << " | "
+                         << m_attempts << " tested | "
+                         << m_cracked << " cracked | "
+                         << rem << " remaining | ETA: "
+                         << stats.etaFormatted(remainingEstimate);
+                utils::Logger::info(progress.str());
+            }
         }
 
 
@@ -345,13 +404,7 @@ int Pipeline::run() {
 
 
     auto elapsed = timer.elapsedSeconds();
-    utils::Logger::info("");
-    utils::Logger::info("================================================");
-    utils::Logger::info("Attack complete!");
-    utils::Logger::info("  Time:      " + timer.elapsedFormatted());
-    utils::Logger::info("  Tested:    " + std::to_string(m_attempts));
-    utils::Logger::info("  Cracked:   " + std::to_string(m_cracked));
-
+    std::string speedStr;
     if (elapsed > 0) {
         double hps = static_cast<double>(m_attempts) / elapsed;
         std::ostringstream ss;
@@ -359,7 +412,20 @@ int Pipeline::run() {
         else if (hps >= 1e6) ss << std::fixed << std::setprecision(2) << (hps/1e6) << " MH/s";
         else if (hps >= 1e3) ss << std::fixed << std::setprecision(2) << (hps/1e3) << " kH/s";
         else ss << static_cast<int64_t>(hps) << " H/s";
-        utils::Logger::info("  Speed:     " + ss.str());
+        speedStr = ss.str();
+    }
+
+    if (tui) {
+        tui->summary(m_attempts, m_cracked, timer.elapsedFormatted(), speedStr);
+    }
+    utils::Logger::info("");
+    utils::Logger::info("================================================");
+    utils::Logger::info("Attack complete!");
+    utils::Logger::info("  Time:      " + timer.elapsedFormatted());
+    utils::Logger::info("  Tested:    " + std::to_string(m_attempts));
+    utils::Logger::info("  Cracked:   " + std::to_string(m_cracked));
+    if (!speedStr.empty()) {
+        utils::Logger::info("  Speed:     " + speedStr);
     }
 
 

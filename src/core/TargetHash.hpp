@@ -36,6 +36,9 @@ public:
     std::string hex() const;
 
     bool cracked = false;
+    std::string username;  // populated when parsed from /etc/shadow
+
+    void setUsername(const std::string& u) { username = u; }
 
 private:
     HashType m_algorithm = HashType::MD5;

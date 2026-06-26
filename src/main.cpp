@@ -69,6 +69,9 @@ int main(int argc, char** argv) {
         "Disable API fallback when offline exhausted");
 
 
+    app.add_flag("--no-tui", cliConfig.noTui,
+        "Disable live TUI progress display (use plain logging)");
+
     app.add_flag("--cpu-only", cliConfig.cpuOnly,
         "Force CPU-only mode (no GPU)");
 
@@ -143,6 +146,7 @@ int main(int argc, char** argv) {
     if (app.count("--provider"))      config.apiProvider  = cliConfig.apiProvider;
     if (app.count("--api-key"))       config.apiKey       = cliConfig.apiKey;
     if (app.count("--no-api-fallback")) config.apiFallback = cliConfig.apiFallback;
+    if (app.count("--no-tui"))        config.noTui        = cliConfig.noTui;
     if (app.count("--cpu-only"))      config.cpuOnly      = cliConfig.cpuOnly;
     if (app.count("--device"))        config.gpuDevice     = cliConfig.gpuDevice;
     if (app.count("--batch-size"))    config.fastHashBatchSize = cliConfig.fastHashBatchSize;
