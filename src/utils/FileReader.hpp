@@ -4,6 +4,7 @@
 #include <fstream>
 #include <vector>
 #include <optional>
+#include <cstdint>
 
 namespace fenrir {
 namespace utils {
