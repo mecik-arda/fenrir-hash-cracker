@@ -3,6 +3,24 @@
 
 #include <fstream>
 #include <stdexcept>
+#include <cstdio>
+#include <vector>
+
+namespace {
+
+// Simple CRC32 for checkpoint integrity
+uint32_t computeCRC32(const uint8_t* data, size_t len) {
+    uint32_t crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++) {
+            crc = (crc >> 1) ^ ((crc & 1) ? 0xEDB88320 : 0);
+        }
+    }
+    return crc ^ 0xFFFFFFFF;
+}
+
+}
 
 namespace fenrir {
 namespace utils {
@@ -13,34 +31,38 @@ void Checkpoint::save(const std::string& path, const Data& data) {
         throw std::runtime_error("Cannot write checkpoint: " + path);
     }
 
+    // Collect all data for CRC computation
+    std::vector<uint8_t> crcData;
+    auto writeBytes = [&](const void* ptr, size_t size) {
+        auto* p = reinterpret_cast<const uint8_t*>(ptr);
+        crcData.insert(crcData.end(), p, p + size);
+    };
 
-    file.write(reinterpret_cast<const char*>(&core::CHECKPOINT_MAGIC), 4);
-    file.write(reinterpret_cast<const char*>(&core::CHECKPOINT_VERSION_MAJOR), 2);
-    file.write(reinterpret_cast<const char*>(&core::CHECKPOINT_VERSION_MINOR), 2);
-
-
-    file.write(reinterpret_cast<const char*>(&data.algorithm), 4);
-
+    writeBytes(&core::CHECKPOINT_MAGIC, 4);
+    writeBytes(&core::CHECKPOINT_VERSION_MAJOR, 2);
+    writeBytes(&core::CHECKPOINT_VERSION_MINOR, 2);
+    writeBytes(&data.algorithm, 4);
 
     uint32_t targetSize = static_cast<uint32_t>(data.targets.size());
-    file.write(reinterpret_cast<const char*>(&targetSize), 4);
+    writeBytes(&targetSize, 4);
     if (!data.targets.empty()) {
-        file.write(reinterpret_cast<const char*>(data.targets.data()), targetSize);
+        writeBytes(data.targets.data(), targetSize);
     }
-
 
     uint32_t stateSize = static_cast<uint32_t>(data.attackState.size());
-    file.write(reinterpret_cast<const char*>(&stateSize), 4);
+    writeBytes(&stateSize, 4);
     if (!data.attackState.empty()) {
-        file.write(reinterpret_cast<const char*>(data.attackState.data()), stateSize);
+        writeBytes(data.attackState.data(), stateSize);
     }
 
+    writeBytes(&data.candidatesGenerated, 8);
+    writeBytes(&data.startedAt, 8);
 
-    file.write(reinterpret_cast<const char*>(&data.candidatesGenerated), 8);
-    file.write(reinterpret_cast<const char*>(&data.startedAt), 8);
+    // Write data to file
+    file.write(reinterpret_cast<const char*>(crcData.data()), crcData.size());
 
-
-    uint32_t crc = 0;
+    // Compute and write CRC32
+    uint32_t crc = computeCRC32(crcData.data(), crcData.size());
     file.write(reinterpret_cast<const char*>(&crc), 4);
 }
 

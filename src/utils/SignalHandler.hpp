@@ -19,6 +19,8 @@ public:
 
     static void reset();
 
+    static void checkAndInvoke();
+
     static std::atomic<bool> s_interrupted;
     static Callback s_callback;
 };

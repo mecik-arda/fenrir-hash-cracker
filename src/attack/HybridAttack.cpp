@@ -75,22 +75,45 @@ bool HybridAttack::nextBatch(std::vector<std::string>& candidates, size_t batchS
 }
 
 std::vector<uint8_t> HybridAttack::serializeState() const {
-    std::vector<uint8_t> d(32,0);
+    size_t sz = 16 + 4 + 4 + m_suffixIndices.size() * 8;
+    std::vector<uint8_t> d(sz, 0);
     uint64_t offset = m_reader ? m_reader->currentOffset() : 0;
     std::memcpy(d.data(), &offset, 8);
     std::memcpy(d.data()+8, &m_generated, 8);
+    int suffixLen = m_currentSuffixLen;
+    std::memcpy(d.data()+16, &suffixLen, 4);
+    int indicesCount = static_cast<int>(m_suffixIndices.size());
+    std::memcpy(d.data()+20, &indicesCount, 4);
+    for (size_t i=0; i<m_suffixIndices.size(); i++) {
+        uint64_t val = m_suffixIndices[i];
+        std::memcpy(d.data()+24+i*8, &val, 8);
+    }
     return d;
 }
 
 void HybridAttack::deserializeState(const std::vector<uint8_t>& d) {
-    if (d.size()<16 || !m_reader) return;
+    if (d.size()<24 || !m_reader) return;
     uint64_t off, gen;
     std::memcpy(&off,d.data(),8);
     std::memcpy(&gen,d.data()+8,8);
+    int suffixLen, indicesCount;
+    std::memcpy(&suffixLen,d.data()+16,4);
+    std::memcpy(&indicesCount,d.data()+20,4);
+    if (indicesCount < 0 || indicesCount > 256) indicesCount = 0; // sanity check
     m_reader->seekTo(off);
     m_generated=gen;
     m_exhausted=false;
     m_currentWord.clear();
+    m_currentSuffixLen = suffixLen;
+    m_suffixIndices.resize(indicesCount);
+    if (d.size() >= 24 + static_cast<size_t>(indicesCount)*8) {
+        for (int i=0; i<indicesCount; i++) {
+            uint64_t val;
+            std::memcpy(&val, d.data()+24+i*8, 8);
+            m_suffixIndices[i] = static_cast<size_t>(val);
+        }
+    }
+    m_suffixExhausted = false;
 }
 
 uint64_t HybridAttack::totalCandidateEstimate() const { return m_totalEstimate; }

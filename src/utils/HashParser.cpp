@@ -85,27 +85,13 @@ core::TargetHash HashParser::parse(const std::string& hashStr,
 
 
     if (expectedType == core::HashType::BCRYPT && !s.empty() && s[0] == '$') {
-
-
-        std::string salt;
-        std::string hashHex;
-        size_t p1 = s.find('$', 1);
-        size_t p2 = s.find('$', p1 + 1);
-        if (p2 != std::string::npos) {
-            salt = s.substr(p1 + 1, p2 - p1 - 1);
-
-            hashHex = s.substr(p2 + 1);
-        }
-        std::vector<uint8_t> saltBytes(salt.begin(), salt.end());
-        std::vector<uint8_t> hashBytes(hashHex.begin(), hashHex.end());
-        return core::TargetHash(expectedType, hashBytes, saltBytes);
+        std::vector<uint8_t> allBytes(s.begin(), s.end());
+        return core::TargetHash(expectedType, allBytes, allBytes);
     }
 
-
     if (expectedType == core::HashType::ARGON2 && !s.empty() && s[0] == '$') {
-        std::string rest = s.substr(s.find('$', 1) + 1);
-        std::vector<uint8_t> hashBytes(rest.begin(), rest.end());
-        return core::TargetHash(expectedType, hashBytes, {});
+        std::vector<uint8_t> allBytes(s.begin(), s.end());
+        return core::TargetHash(expectedType, allBytes, allBytes);
     }
 
     if (expectedType == core::HashType::PBKDF2 && !s.empty() && s[0] == '$') {

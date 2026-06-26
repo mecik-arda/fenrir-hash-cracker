@@ -16,6 +16,7 @@ bool RuleEngine::apply(const CompiledRule& rule,
         OpCode op = static_cast<OpCode>(packed & 0xFF);
         uint8_t p0 = static_cast<uint8_t>((packed >> 8) & 0xFF);
         uint8_t p1 = static_cast<uint8_t>((packed >> 16) & 0xFF);
+
         int newLen = applyOp(op, p0, p1, m_buffer, len);
         if (newLen < 0) return false;
         len = newLen;
@@ -75,10 +76,10 @@ int RuleEngine::applyOp(OpCode op, uint8_t p0, uint8_t p1,
 
 
         case OpCode::APPEND:
-            buf[len]=static_cast<char>(p0);
+            if (len < 255) buf[len]=static_cast<char>(p0);
             return len+1;
         case OpCode::PREPEND:
-            std::memmove(buf+1,buf,static_cast<size_t>(len));
+            if (len > 0) std::memmove(buf+1,buf,static_cast<size_t>(std::min(len, 254)));
             buf[0]=static_cast<char>(p0);
             return len+1;
 
@@ -86,8 +87,11 @@ int RuleEngine::applyOp(OpCode op, uint8_t p0, uint8_t p1,
         case OpCode::INSERT: {
             int pos=static_cast<int>(p0);
             if (pos<0) pos=0; if (pos>len) pos=len;
-            std::memmove(buf+pos+1,buf+pos,static_cast<size_t>(len-pos));
-            buf[pos]=static_cast<char>(p1);
+            if (pos < 255) {
+                int toMove = std::min(len - pos, 254 - pos);
+                if (toMove > 0) std::memmove(buf+pos+1,buf+pos,static_cast<size_t>(toMove));
+                buf[pos]=static_cast<char>(p1);
+            }
             return len+1;
         }
 
@@ -136,24 +140,31 @@ int RuleEngine::applyOp(OpCode op, uint8_t p0, uint8_t p1,
             return len;
 
 
-        case OpCode::DUPLICATE:
-            std::memcpy(buf+len,buf,static_cast<size_t>(len));
+        case OpCode::DUPLICATE: {
+            int toCopy = std::min(len, 255 - len);
+            if (toCopy > 0) std::memcpy(buf+len,buf,static_cast<size_t>(toCopy));
             return len*2;
+        }
 
         case OpCode::DUPLICATE_N: {
             int times=static_cast<int>(p0);
             if (times<1) times=1; if (times>16) times=16;
             int orig=len;
             for (int t=1;t<times;t++) {
-                std::memcpy(buf+orig*t,buf,static_cast<size_t>(orig));
+                int pos = orig*t;
+                int toCopy = std::min(orig, 255 - pos);
+                if (toCopy <= 0) break;
+                std::memcpy(buf+pos,buf,static_cast<size_t>(toCopy));
             }
             return orig*times;
         }
 
 
-        case OpCode::REFLECT:
-            for (int i=0;i<len;i++) buf[len+i]=buf[len-1-i];
+        case OpCode::REFLECT: {
+            int toCopy = std::min(len, 255 - len);
+            for (int i=0;i<toCopy;i++) buf[len+i]=buf[len-1-i];
             return len*2;
+        }
 
 
         case OpCode::ROTATE_L:
@@ -204,17 +215,24 @@ int RuleEngine::applyOp(OpCode op, uint8_t p0, uint8_t p1,
         }
 
 
-        case OpCode::MEMORIZE:
-            std::memcpy(m_memory, buf, static_cast<size_t>(len));
-            m_memoryLen=len;
+        case OpCode::MEMORIZE: {
+            int toCopy = std::min(len, 255);
+            std::memcpy(m_memory, buf, static_cast<size_t>(toCopy));
+            m_memoryLen=toCopy;
             return len;
-        case OpCode::APPEND_MEM:
-            std::memcpy(buf+len, m_memory, static_cast<size_t>(m_memoryLen));
+        }
+        case OpCode::APPEND_MEM: {
+            int toCopy = std::min(m_memoryLen, 255 - len);
+            if (toCopy > 0) std::memcpy(buf+len, m_memory, static_cast<size_t>(toCopy));
             return len+m_memoryLen;
-        case OpCode::PREPEND_MEM:
-            std::memmove(buf+m_memoryLen, buf, static_cast<size_t>(len));
-            std::memcpy(buf, m_memory, static_cast<size_t>(m_memoryLen));
+        }
+        case OpCode::PREPEND_MEM: {
+            int toMove = std::min(len, 255 - m_memoryLen);
+            if (toMove > 0) std::memmove(buf+m_memoryLen, buf, static_cast<size_t>(toMove));
+            int toCopy = std::min(m_memoryLen, 255);
+            if (toCopy > 0) std::memcpy(buf, m_memory, static_cast<size_t>(toCopy));
             return len+m_memoryLen;
+        }
 
 
         case OpCode::REJECT_LEN_GT:

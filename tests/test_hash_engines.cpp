@@ -34,7 +34,7 @@ TEST_CASE("MD5 RFC 1321 test vectors", "[md5][cpu]") {
     REQUIRE(hex(md5.hash("message digest")) == "f96b697d7cb7938d525a2f31aaf161d0");
 
 
-    REQUIRE(hex(md5.hash("1234567890")) == "7c12772809c1c0c3deda6103b10fdfa0");
+    REQUIRE(hex(md5.hash("1234567890")) == "e807f1fcf82d132f9bb018ca6738a19f");
 
 
     REQUIRE(md5.isSlowHash() == false);

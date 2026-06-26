@@ -28,7 +28,11 @@ struct GPUBufferSet {
     size_t candidateCount = 0;
 
     ~GPUBufferSet();
-    void allocate(size_t maxCandidates, size_t maxBytes);
+#ifdef FENRIR_HAS_GPU
+    void allocate(cl_context ctx, size_t maxCandidates, size_t maxBytes);
+#else
+    void allocate(void* ctx, size_t maxCandidates, size_t maxBytes);
+#endif
     void release();
 };
 

@@ -59,15 +59,22 @@ static void md5_avx2_8way(const uint8_t* msgs[8], const size_t lens[8], uint8_t*
                                   0x10325476,0x10325476,0x10325476,0x10325476);
 
     uint64_t bitLens[8];
-    uint8_t padBufs[8][128];
     size_t padLens[8];
-
+    // Compute padLens first, then use max for a single dynamic buffer
+    size_t maxPadLen = 0;
     for (int lane = 0; lane < 8; lane++) {
         size_t ml = lens[lane];
         bitLens[lane] = ml * 8;
+        padLens[lane] = ((ml % 64) < 56) ? ((ml / 64) + 1) * 64 : ((ml / 64) + 2) * 64;
+        if (padLens[lane] > maxPadLen) maxPadLen = padLens[lane];
+    }
+    std::vector<uint8_t> padBufsVec(maxPadLen * 8);
+    uint8_t* padBufs[8];
+    for (int lane = 0; lane < 8; lane++) {
+        padBufs[lane] = padBufsVec.data() + lane * maxPadLen;
+        size_t ml = lens[lane];
         memcpy(padBufs[lane], msgs[lane], ml);
         padBufs[lane][ml] = 0x80;
-        padLens[lane] = ((ml % 64) < 56) ? ((ml / 64) + 1) * 64 : ((ml / 64) + 2) * 64;
         for (size_t i = ml + 1; i < padLens[lane]; i++) padBufs[lane][i] = 0;
         uint64_t bl = bitLens[lane];
         for (int i = 0; i < 8; i++) padBufs[lane][padLens[lane] - 8 + i] = (bl >> (i * 8)) & 0xFF;
@@ -159,10 +166,14 @@ std::vector<uint8_t> MD5_AVX2_Engine::hash(const std::string& input, const std::
         return {};
     }
     std::string s = salt.empty() ? input : std::string(salt.begin(), salt.end()) + input;
-    const uint8_t* msgs[8] = { (const uint8_t*)s.data(), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+    // Use safe static buffers for unused lanes to avoid nullptr dereference
+    static const uint8_t dummyMsg = 0;
+    static uint8_t dummyDigest[16] = {};
+    const uint8_t* msgs[8] = { (const uint8_t*)s.data(), &dummyMsg, &dummyMsg, &dummyMsg, &dummyMsg, &dummyMsg, &dummyMsg, &dummyMsg };
     size_t lens[8] = { s.size(), 0, 0, 0, 0, 0, 0, 0 };
     uint8_t buf[16];
-    uint8_t* digests[8] = { buf, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+    uint8_t d2[16], d3[16], d4[16], d5[16], d6[16], d7[16], d8[16];
+    uint8_t* digests[8] = { buf, d2, d3, d4, d5, d6, d7, d8 };
     md5_avx2_8way(msgs, lens, digests);
     return std::vector<uint8_t>(buf, buf + 16);
 }

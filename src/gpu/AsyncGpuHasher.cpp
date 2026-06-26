@@ -20,20 +20,24 @@ void GPUBufferSet::release() {
 #endif
 }
 
-void GPUBufferSet::allocate(size_t maxCandidates, size_t maxBytes) {
+void GPUBufferSet::allocate(cl_context ctx, size_t maxCandidates, size_t maxBytes) {
 #ifdef FENRIR_HAS_GPU
     release();
-    cl_context ctx = nullptr;
     cl_int err;
     hostPacked.resize(maxBytes, 0);
     hostOffsets.resize(maxCandidates, 0);
     hostLengths.resize(maxCandidates, 0);
-    hostResults.resize(maxCandidates * 8, 0);
+    hostResults.resize(maxCandidates * 4, 0);  // 4 uint32 per candidate
     d_candidates = clCreateBuffer(ctx, CL_MEM_READ_ONLY, maxBytes, nullptr, &err);
+    if (err != CL_SUCCESS) { d_candidates = nullptr; return; }
     d_offsets    = clCreateBuffer(ctx, CL_MEM_READ_ONLY, maxCandidates * sizeof(uint32_t), nullptr, &err);
+    if (err != CL_SUCCESS) return;
     d_lengths    = clCreateBuffer(ctx, CL_MEM_READ_ONLY, maxCandidates, nullptr, &err);
-    d_results    = clCreateBuffer(ctx, CL_MEM_READ_WRITE, maxCandidates * 8 * sizeof(uint32_t), nullptr, &err);
-    d_found      = clCreateBuffer(ctx, CL_MEM_READ_WRITE, sizeof(int), nullptr, &err);
+    if (err != CL_SUCCESS) return;
+    d_results    = clCreateBuffer(ctx, CL_MEM_READ_WRITE, maxCandidates * 4 * sizeof(uint32_t), nullptr, &err);
+    if (err != CL_SUCCESS) return;
+    d_found      = clCreateBuffer(ctx, CL_MEM_READ_WRITE, sizeof(int32_t), nullptr, &err);
+    if (err != CL_SUCCESS) return;
     candidateCount = 0;
 #endif
 }
@@ -55,7 +59,14 @@ bool AsyncGpuHasher::initialize(const std::string& hashType, const std::string& 
     autoTuneWorkSize();
     m_maxCandidates = core::DEFAULT_FAST_HASH_BATCH_SIZE;
     m_buffers.resize(m_numBuffers);
-    for (int i = 0; i < m_numBuffers; i++) m_buffers[i] = std::make_unique<GPUBufferSet>();
+    for (int i = 0; i < m_numBuffers; i++) {
+        m_buffers[i] = std::make_unique<GPUBufferSet>();
+#ifdef FENRIR_HAS_GPU
+        if (m_context && m_context->isAvailable()) {
+            m_buffers[i]->allocate(m_context->context(), m_maxCandidates, m_maxCandidates * 64);
+        }
+#endif
+    }
     m_currentWrite = 0;
     m_currentCompute = 0;
     m_pendingSubmits = 0;
@@ -91,8 +102,8 @@ bool AsyncGpuHasher::submitBatch(const std::vector<std::string>& candidates,
     clEnqueueWriteBuffer(q, buf->d_lengths, CL_FALSE, 0, candidates.size(),
                          buf->hostLengths.data(), 0, nullptr, nullptr);
 
-    int foundInit = -1;
-    clEnqueueWriteBuffer(q, buf->d_found, CL_FALSE, 0, sizeof(int),
+    int32_t foundInit = static_cast<int32_t>(candidates.size() + 1);
+    clEnqueueWriteBuffer(q, buf->d_found, CL_FALSE, 0, sizeof(int32_t),
                          &foundInit, 0, nullptr, nullptr);
     clFlush(q);
 
@@ -113,6 +124,21 @@ bool AsyncGpuHasher::waitForCompletion(std::vector<size_t>& foundIndices) {
     cl_int err;
     cl_command_queue q = m_context->commandQueue();
 
+    // Wait for writes to complete before launching kernel
+    if (buf->writeEvent) {
+        clWaitForEvents(1, &buf->writeEvent);
+        clReleaseEvent(buf->writeEvent);
+        buf->writeEvent = nullptr;
+    }
+
+    // Upload target prefix (use first target's prefix to match kernel interface)
+    cl_mem d_targetPrefix = nullptr;
+    uint32_t targetPrefix = m_lastTargetPrefixes.empty() ? 0xFFFFFFFF : m_lastTargetPrefixes[0];
+    d_targetPrefix = clCreateBuffer(m_context->context(),
+                                     CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                     sizeof(uint32_t), &targetPrefix, &err);
+    if (err != CL_SUCCESS) return false;
+
     cl_event kernelDone;
     size_t globalSize = ((buf->candidateCount + m_localWorkSize - 1) / m_localWorkSize) * m_localWorkSize;
 
@@ -120,7 +146,8 @@ bool AsyncGpuHasher::waitForCompletion(std::vector<size_t>& foundIndices) {
     clSetKernelArg(m_currentKernel->kernel(), 1, sizeof(cl_mem), &buf->d_offsets);
     clSetKernelArg(m_currentKernel->kernel(), 2, sizeof(cl_mem), &buf->d_lengths);
     clSetKernelArg(m_currentKernel->kernel(), 3, sizeof(cl_mem), &buf->d_results);
-    clSetKernelArg(m_currentKernel->kernel(), 4, sizeof(cl_mem), &buf->d_found);
+    clSetKernelArg(m_currentKernel->kernel(), 4, sizeof(cl_mem), &d_targetPrefix);
+    clSetKernelArg(m_currentKernel->kernel(), 5, sizeof(cl_mem), &buf->d_found);
 
     clEnqueueNDRangeKernel(q, m_currentKernel->kernel(), 1, nullptr,
                            &globalSize, &m_localWorkSize,
@@ -130,15 +157,14 @@ bool AsyncGpuHasher::waitForCompletion(std::vector<size_t>& foundIndices) {
     clWaitForEvents(1, &kernelDone);
     clReleaseEvent(kernelDone);
 
-    clEnqueueReadBuffer(q, buf->d_found, CL_TRUE, 0, sizeof(int),
+    clEnqueueReadBuffer(q, buf->d_found, CL_TRUE, 0, sizeof(int32_t),
                         &buf->hostFound, 0, nullptr, nullptr);
 
     if (buf->hostFound >= 0 && static_cast<size_t>(buf->hostFound) < buf->candidateCount) {
-        clEnqueueReadBuffer(q, buf->d_results, CL_TRUE, 0,
-                            buf->candidateCount * 8 * sizeof(uint32_t),
-                            buf->hostResults.data(), 0, nullptr, nullptr);
         foundIndices.push_back(static_cast<size_t>(buf->hostFound));
     }
+
+    clReleaseMemObject(d_targetPrefix);
 #endif
 
     m_currentCompute++;

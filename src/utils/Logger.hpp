@@ -22,12 +22,12 @@ public:
     }
 
 
-    static void trace(const std::string& msg) { get()->trace(msg); }
-    static void debug(const std::string& msg) { get()->debug(msg); }
-    static void info(const std::string& msg)  { get()->info(msg); }
-    static void warn(const std::string& msg)  { get()->warn(msg); }
-    static void error(const std::string& msg) { get()->error(msg); }
-    static void critical(const std::string& msg) { get()->critical(msg); }
+    static void trace(const std::string& msg) { auto l = get(); if (l) l->trace(msg); }
+    static void debug(const std::string& msg) { auto l = get(); if (l) l->debug(msg); }
+    static void info(const std::string& msg)  { auto l = get(); if (l) l->info(msg); }
+    static void warn(const std::string& msg)  { auto l = get(); if (l) l->warn(msg); }
+    static void error(const std::string& msg) { auto l = get(); if (l) l->error(msg); }
+    static void critical(const std::string& msg) { auto l = get(); if (l) l->critical(msg); }
 };
 
 }

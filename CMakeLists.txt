@@ -25,7 +25,7 @@ include(FetchContent)
 
 FetchContent_Declare(cli11
     GIT_REPOSITORY  https://github.com/CLIUtils/CLI11.git
-    GIT_TAG         v2.4.2)
+    GIT_TAG         v2.5.0)
 FetchContent_MakeAvailable(cli11)
 
 FetchContent_Declare(json
@@ -37,6 +37,33 @@ FetchContent_Declare(spdlog
     GIT_REPOSITORY  https://github.com/gabime/spdlog.git
     GIT_TAG         v1.15.3)
 FetchContent_MakeAvailable(spdlog)
+
+FetchContent_Declare(argon2
+    GIT_REPOSITORY  https://github.com/P-H-C/phc-winner-argon2.git
+    GIT_TAG         master)
+FetchContent_Populate(argon2)
+add_library(fenrir_argon2 STATIC
+    ${argon2_SOURCE_DIR}/src/argon2.c
+    ${argon2_SOURCE_DIR}/src/core.c
+    ${argon2_SOURCE_DIR}/src/blake2/blake2b.c
+    ${argon2_SOURCE_DIR}/src/thread.c
+    ${argon2_SOURCE_DIR}/src/encoding.c
+    ${argon2_SOURCE_DIR}/src/opt.c
+)
+target_include_directories(fenrir_argon2 PUBLIC ${argon2_SOURCE_DIR}/include)
+
+FetchContent_Declare(libbcrypt
+    GIT_REPOSITORY  https://github.com/trusch/libbcrypt.git
+    GIT_TAG         master)
+FetchContent_Populate(libbcrypt)
+add_library(fenrir_bcrypt STATIC
+    ${libbcrypt_SOURCE_DIR}/src/bcrypt.c
+    ${libbcrypt_SOURCE_DIR}/src/crypt_blowfish.c
+    ${libbcrypt_SOURCE_DIR}/src/crypt_gensalt.c
+    ${libbcrypt_SOURCE_DIR}/src/wrapper.c
+)
+target_include_directories(fenrir_bcrypt PUBLIC ${libbcrypt_SOURCE_DIR}/include)
+
 
 if(FENRIR_USE_OPENCL)
     find_package(OpenCL QUIET)
@@ -76,7 +103,7 @@ add_library(fenrir_core STATIC
     src/core/Pipeline.cpp
     src/core/ResultWriter.cpp)
 target_include_directories(fenrir_core PUBLIC src)
-target_link_libraries(fenrir_core PUBLIC nlohmann_json::nlohmann_json spdlog::spdlog)
+target_link_libraries(fenrir_core PUBLIC nlohmann_json::nlohmann_json spdlog::spdlog fenrir_argon2 fenrir_bcrypt)
 
 add_library(fenrir_utils STATIC
     src/utils/Logger.cpp
@@ -169,5 +196,7 @@ if(FENRIR_BUILD_TESTS)
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
         GIT_TAG        v3.7.1)
     FetchContent_MakeAvailable(Catch2)
+    list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
+    include(Catch)
     add_subdirectory(tests)
 endif()

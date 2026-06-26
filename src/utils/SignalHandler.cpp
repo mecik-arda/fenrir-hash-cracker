@@ -9,10 +9,9 @@ std::atomic<bool> SignalHandler::s_interrupted{false};
 SignalHandler::Callback SignalHandler::s_callback;
 
 static void signalHandler(int) {
+    // Only set atomic flag in signal handler (signal-safe).
+    // The callback is polled by the main loop during safe points.
     SignalHandler::s_interrupted.store(true);
-    if (SignalHandler::s_callback) {
-        SignalHandler::s_callback();
-    }
 }
 
 void SignalHandler::install(Callback onInterrupt) {
@@ -23,6 +22,13 @@ void SignalHandler::install(Callback onInterrupt) {
 
 bool SignalHandler::interrupted() {
     return s_interrupted.load();
+}
+
+void SignalHandler::checkAndInvoke() {
+    if (s_interrupted.load() && s_callback) {
+        s_callback();
+        s_interrupted.store(false);
+    }
 }
 
 void SignalHandler::reset() {

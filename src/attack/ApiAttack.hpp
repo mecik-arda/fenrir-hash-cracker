@@ -27,6 +27,8 @@ public:
 private:
     uint64_t m_generated = 0;
     bool m_exhausted = false;
+    std::vector<std::string> m_targetHashes;
+    size_t m_hashIndex = 0;
 };
 
 } }

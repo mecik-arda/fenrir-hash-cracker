@@ -9,6 +9,12 @@ namespace utils {
 void Logger::init(const std::string& level,
                    const std::string& logFile,
                    bool consoleColors) {
+    // Make init() idempotent — drop and re-create if called again
+    auto existing = spdlog::get("fenrir");
+    if (existing) {
+        spdlog::drop("fenrir");
+    }
+
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     if (consoleColors) {
         console_sink->set_pattern("[%^%l%$] %H:%M:%S %v");

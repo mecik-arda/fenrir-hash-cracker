@@ -73,28 +73,36 @@ void GpuHasher::hashBatch(const std::vector<std::string>& candidates,
     if (err != CL_SUCCESS) return;
     guard.add(d_lengths);
 
-    cl_mem d_targets = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                                      targets.size() * sizeof(uint32_t), (void*)targets.data(), &err);
+    // Results buffer: kernel writes 4 uint32 per candidate (16 bytes each)
+    size_t resultSize = candidates.size() * 4 * sizeof(uint32_t);
+    cl_mem d_results = clCreateBuffer(ctx, CL_MEM_READ_WRITE, resultSize, nullptr, &err);
     if (err != CL_SUCCESS) return;
-    guard.add(d_targets);
+    guard.add(d_results);
 
-    std::vector<uint32_t> foundFlags(candidates.size(), 0);
-    cl_mem d_found = clCreateBuffer(ctx, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR,
-                                    foundFlags.size() * sizeof(uint32_t), foundFlags.data(), &err);
-    if (err != CL_SUCCESS) return;
+    // Target prefix: copy first target's first word as the kernel target
+    // For now, use the first target's prefix since kernel only handles single target
+    uint32_t targetPrefix = targets.empty() ? 0xFFFFFFFF : targets[0];
+    // Use a 4-byte buffer for the constant target_prefix (kernel reads __constant uint*)
+    cl_mem d_targetPrefix = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                           sizeof(uint32_t), &targetPrefix, &err);
+    if (err != CL_SUCCESS) { clReleaseMemObject(d_results); return; }
+    guard.add(d_targetPrefix);
+
+    // Found flag: single int initialized to large value for atom_min to work
+    int32_t foundInit = static_cast<int32_t>(candidates.size() + 1);
+    cl_mem d_found = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+                                    sizeof(int32_t), &foundInit, &err);
+    if (err != CL_SUCCESS) { clReleaseMemObject(d_targetPrefix); return; }
     guard.add(d_found);
-
-    uint32_t numTargets = static_cast<uint32_t>(targets.size());
 
     m_currentKernel->setArgBuffer(0, sizeof(cl_mem), &d_packed);
     m_currentKernel->setArgBuffer(1, sizeof(cl_mem), &d_offsets);
     m_currentKernel->setArgBuffer(2, sizeof(cl_mem), &d_lengths);
-    m_currentKernel->setArgBuffer(3, sizeof(cl_mem), &d_targets);
-    m_currentKernel->setArgBuffer(4, sizeof(uint32_t), &numTargets);
+    m_currentKernel->setArgBuffer(3, sizeof(cl_mem), &d_results);
+    m_currentKernel->setArgBuffer(4, sizeof(cl_mem), &d_targetPrefix);
     m_currentKernel->setArgBuffer(5, sizeof(cl_mem), &d_found);
 
     size_t globalWorkSize = candidates.size();
-    
     size_t remainder = globalWorkSize % m_localWorkSize;
     if (remainder != 0) {
         globalWorkSize += (m_localWorkSize - remainder);
@@ -102,18 +110,14 @@ void GpuHasher::hashBatch(const std::vector<std::string>& candidates,
 
     m_currentKernel->execute(globalWorkSize, m_localWorkSize);
 
+    // Read found flag
+    int32_t foundIdx = 0;
     err = clEnqueueReadBuffer(queue, d_found, CL_TRUE, 0,
-                              foundFlags.size() * sizeof(uint32_t), foundFlags.data(),
-                              0, nullptr, nullptr);
+                              sizeof(int32_t), &foundIdx, 0, nullptr, nullptr);
 
-    if (err == CL_SUCCESS) {
-        for (size_t i = 0; i < candidates.size(); ++i) {
-            if (foundFlags[i] != 0) {
-                found.push_back(i);
-            }
-        }
-    } else {
-        utils::Logger::error("Failed to read result buffer from GPU");
+    if (err == CL_SUCCESS && foundIdx >= 0 &&
+        static_cast<size_t>(foundIdx) < candidates.size()) {
+        found.push_back(static_cast<size_t>(foundIdx));
     }
 #endif
 }

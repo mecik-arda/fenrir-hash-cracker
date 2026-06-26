@@ -10,16 +10,10 @@
 int main(int argc, char** argv) {
     using namespace fenrir;
 
-
-    utils::Logger::init("info", "", true);
-
-
     CLI::App app{core::DESCRIPTION};
     app.set_version_flag("--version,-V", core::VERSION_STRING);
 
-
     core::Config cliConfig;
-
 
     app.add_option("-m,--mode", cliConfig.hashMode,
         "Hash mode: md5, sha1, sha256, sha512, ntlm, bcrypt, scrypt");
@@ -27,19 +21,17 @@ int main(int argc, char** argv) {
     app.add_option("-a,--attack", cliConfig.attack,
         "Attack mode: dict, rule, mask, hybrid, api");
 
-
-    app.add_option("-h,--hashes", cliConfig.hashFiles,
-        "Target hash file(s)")->check(CLI::ExistingFile);
+    app.add_option("-H,--hashes", cliConfig.hashFiles,
+        "Target hash file(s)");
 
     app.add_option("--hash", cliConfig.inlineHashes,
         "Inline target hash(es)");
 
-
     app.add_option("-w,--wordlist", cliConfig.wordlist,
-        "Wordlist file path")->check(CLI::ExistingFile | CLI::NonexistentPath);
+        "Wordlist file path");
 
     app.add_option("-r,--rule-file", cliConfig.ruleFile,
-        "Rule file (.rule) path")->check(CLI::ExistingFile | CLI::NonexistentPath);
+        "Rule file (.rule) path");
 
     app.add_option("-p,--mask-pattern", cliConfig.maskPattern,
         "Mask pattern (e.g., ?l?l?l?d?d)");
@@ -120,8 +112,6 @@ int main(int argc, char** argv) {
 
     auto config = core::Config::load();
 
-
-
     if (app.count("--mode"))          config.hashMode     = cliConfig.hashMode;
     if (app.count("--attack"))        config.attack       = cliConfig.attack;
     if (app.count("--hashes"))        config.hashFiles    = cliConfig.hashFiles;
@@ -181,7 +171,7 @@ int main(int argc, char** argv) {
         errors.push_back("Attack mode (-a/--attack) is required");
     }
     if (config.hashFiles.empty() && config.inlineHashes.empty()) {
-        errors.push_back("Target hash file (-h) or inline hash (--hash) is required");
+        errors.push_back("Target hash file (-H) or inline hash (--hash) is required");
     }
 
 

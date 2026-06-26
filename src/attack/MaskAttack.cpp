@@ -34,7 +34,7 @@ void MaskAttack::buildFromMask(const std::string& mask, const core::Config& cfg)
 
             const std::string common = "aeiousnrltcdpmhbgfyvkwzxzjqxAEIOUSNRLTCDPMHBGFYVKWZXZJQX0123456789";
             std::string ordered;
-            for (char c : common) if (cs.find(c)!=std::string::npos) ordered+=c;
+            for (char c : common) if (cs.find(c)!=std::string::npos && ordered.find(c)==std::string::npos) ordered+=c;
             for (char c : cs) if (ordered.find(c)==std::string::npos) ordered+=c;
             m_slots.push_back({ordered, ordered.size(), 0});
             i++;

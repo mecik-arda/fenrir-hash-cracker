@@ -34,6 +34,7 @@ private:
         static void cpuid(int info[4], int level);
     #endif
     static bool checkXCR0();
+    static bool checkXCR0_AVX512();
 };
 
 } }

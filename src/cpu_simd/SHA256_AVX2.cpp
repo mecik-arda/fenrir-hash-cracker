@@ -50,14 +50,22 @@ static void sha256_avx2_8way(const uint8_t* msgs[8], const size_t lens[8], uint8
     H[4] = _mm256_set1_epi32(0x510e527f); H[5] = _mm256_set1_epi32(0x9b05688c);
     H[6] = _mm256_set1_epi32(0x1f83d9ab); H[7] = _mm256_set1_epi32(0x5be0cd19);
 
-    uint8_t padBufs[8][128];
     size_t padLens[8];
+    // Compute padLens first, then use max for dynamic buffer
+    size_t maxPadLen = 0;
     for (int lane = 0; lane < 8; lane++) {
+        size_t ml = lens[lane];
+        padLens[lane] = ((ml % 64) < 56) ? ((ml / 64) + 1) * 64 : ((ml / 64) + 2) * 64;
+        if (padLens[lane] > maxPadLen) maxPadLen = padLens[lane];
+    }
+    std::vector<uint8_t> padBufsVec(maxPadLen * 8);
+    uint8_t* padBufs[8];
+    for (int lane = 0; lane < 8; lane++) {
+        padBufs[lane] = padBufsVec.data() + lane * maxPadLen;
         size_t ml = lens[lane];
         uint64_t bitLen = ml * 8;
         memcpy(padBufs[lane], msgs[lane], ml);
         padBufs[lane][ml] = 0x80;
-        padLens[lane] = ((ml % 64) < 56) ? ((ml / 64) + 1) * 64 : ((ml / 64) + 2) * 64;
         for (size_t i = ml + 1; i < padLens[lane] - 8; i++) padBufs[lane][i] = 0;
         for (int i = 7; i >= 0; i--) padBufs[lane][padLens[lane] - 8 + i] = (bitLen >> ((7 - i) * 8)) & 0xFF;
     }
@@ -129,9 +137,11 @@ static void sha256_avx2_8way(const uint8_t* msgs[8], const size_t lens[8], uint8
 std::vector<uint8_t> SHA256_AVX2_Engine::hash(const std::string& input, const std::vector<uint8_t>& salt) const {
     if (!SIMDDetector::hasAVX2()) return {};
     std::string s = salt.empty() ? input : std::string(salt.begin(), salt.end()) + input;
-    const uint8_t* msgs[8] = { (const uint8_t*)s.data() };
-    size_t lens[8] = { s.size() };
-    uint8_t buf[32], *digests[8] = { buf };
+    static const uint8_t dummyMsg = 0;
+    const uint8_t* msgs[8] = { (const uint8_t*)s.data(), &dummyMsg, &dummyMsg, &dummyMsg, &dummyMsg, &dummyMsg, &dummyMsg, &dummyMsg };
+    size_t lens[8] = { s.size(), 0, 0, 0, 0, 0, 0, 0 };
+    uint8_t buf[32], d2[32]={}, d3[32]={}, d4[32]={}, d5[32]={}, d6[32]={}, d7[32]={}, d8[32]={};
+    uint8_t* digests[8] = { buf, d2, d3, d4, d5, d6, d7, d8 };
     sha256_avx2_8way(msgs, lens, digests);
     return std::vector<uint8_t>(buf, buf + 32);
 }
