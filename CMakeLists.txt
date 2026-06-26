@@ -63,7 +63,9 @@ add_library(fenrir_bcrypt STATIC
     ${libbcrypt_SOURCE_DIR}/src/wrapper.c
 )
 target_include_directories(fenrir_bcrypt PUBLIC ${libbcrypt_SOURCE_DIR}/include)
-target_include_directories(fenrir_bcrypt PRIVATE ${libbcrypt_SOURCE_DIR}/src)
+if(NOT WIN32)
+    target_include_directories(fenrir_bcrypt PRIVATE ${libbcrypt_SOURCE_DIR}/include/bcrypt)
+endif()
 
 
 if(FENRIR_USE_OPENCL)
