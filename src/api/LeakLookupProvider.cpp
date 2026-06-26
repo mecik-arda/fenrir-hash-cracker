@@ -30,6 +30,8 @@ std::string LeakLookupProvider::httpGet(const std::string& url) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "Fenrir/1.0");
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
 
     struct curl_slist* headers = nullptr;
@@ -65,7 +67,7 @@ std::string LeakLookupProvider::httpGet(const std::string& url) {
 }
 
 std::optional<ApiQueryResult> LeakLookupProvider::query(const std::string& hash) {
-    std::string url = "https:
+    std::string url = "https://leak-lookup.com/api/v2/hash/" + hash;
     auto response = httpGet(url);
 
     if (response.empty()) return std::nullopt;

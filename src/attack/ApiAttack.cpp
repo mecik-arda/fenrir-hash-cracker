@@ -4,6 +4,9 @@
 
 namespace fenrir { namespace attack {
 
+ApiAttack::ApiAttack() = default;
+ApiAttack::~ApiAttack() = default;
+
 void ApiAttack::initialize(const core::Config& cfg) {
     m_apiKey = cfg.apiKey;
     m_provider = cfg.apiProvider;

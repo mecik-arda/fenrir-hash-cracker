@@ -45,7 +45,7 @@ std::vector<std::string> FileReader::readLines(size_t count) {
 }
 
 uint64_t FileReader::currentOffset() const {
-    return static_cast<uint64_t>(m_file.tellg());
+    return static_cast<uint64_t>(const_cast<std::ifstream&>(m_file).tellg());
 }
 
 void FileReader::seekTo(uint64_t offset) {

@@ -57,7 +57,13 @@ public:
 
     std::string buildLog() const;
 
-    OclKernel kernel() const { return m_kernel; }
+    OclKernel kernel() const {
+#ifdef FENRIR_HAS_GPU
+        return m_kernel;
+#else
+        return nullptr;
+#endif
+    }
     bool isReady() const;
 
 private:

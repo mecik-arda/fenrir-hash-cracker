@@ -8,7 +8,7 @@ namespace utils {
 std::atomic<bool> SignalHandler::s_interrupted{false};
 SignalHandler::Callback SignalHandler::s_callback;
 
-static void signalHandler(int ) {
+static void signalHandler(int) {
     SignalHandler::s_interrupted.store(true);
     if (SignalHandler::s_callback) {
         SignalHandler::s_callback();

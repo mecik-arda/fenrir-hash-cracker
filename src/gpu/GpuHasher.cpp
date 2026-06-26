@@ -50,37 +50,42 @@ void GpuHasher::hashBatch(const std::vector<std::string>& candidates,
     cl_context ctx = m_context->context();
     cl_command_queue queue = m_context->commandQueue();
 
-    // Allocate device buffers
+    struct BufferGuard {
+        std::vector<cl_mem> bufs;
+        ~BufferGuard() {
+            for (auto b : bufs) if (b) clReleaseMemObject(b);
+        }
+        void add(cl_mem b) { if (b) bufs.push_back(b); }
+    } guard;
+
     cl_mem d_packed = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                                      packed.size(), packed.data(), &err);
     if (err != CL_SUCCESS) return;
+    guard.add(d_packed);
 
     cl_mem d_offsets = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                                       offsets.size() * sizeof(uint32_t), offsets.data(), &err);
-    if (err != CL_SUCCESS) { clReleaseMemObject(d_packed); return; }
+    if (err != CL_SUCCESS) return;
+    guard.add(d_offsets);
 
     cl_mem d_lengths = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                                       lengths.size() * sizeof(uint8_t), lengths.data(), &err);
-    if (err != CL_SUCCESS) { clReleaseMemObject(d_packed); clReleaseMemObject(d_offsets); return; }
+    if (err != CL_SUCCESS) return;
+    guard.add(d_lengths);
 
     cl_mem d_targets = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                                       targets.size() * sizeof(uint32_t), (void*)targets.data(), &err);
-    if (err != CL_SUCCESS) {
-        clReleaseMemObject(d_packed); clReleaseMemObject(d_offsets); clReleaseMemObject(d_lengths); return;
-    }
+    if (err != CL_SUCCESS) return;
+    guard.add(d_targets);
 
-    // Allocate result buffer (we just use a simple flag array here for demonstration, size of candidates)
     std::vector<uint32_t> foundFlags(candidates.size(), 0);
     cl_mem d_found = clCreateBuffer(ctx, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR,
                                     foundFlags.size() * sizeof(uint32_t), foundFlags.data(), &err);
-    if (err != CL_SUCCESS) {
-        clReleaseMemObject(d_packed); clReleaseMemObject(d_offsets);
-        clReleaseMemObject(d_lengths); clReleaseMemObject(d_targets); return;
-    }
+    if (err != CL_SUCCESS) return;
+    guard.add(d_found);
 
     uint32_t numTargets = static_cast<uint32_t>(targets.size());
 
-    // Set kernel arguments
     m_currentKernel->setArgBuffer(0, sizeof(cl_mem), &d_packed);
     m_currentKernel->setArgBuffer(1, sizeof(cl_mem), &d_offsets);
     m_currentKernel->setArgBuffer(2, sizeof(cl_mem), &d_lengths);
@@ -90,16 +95,13 @@ void GpuHasher::hashBatch(const std::vector<std::string>& candidates,
 
     size_t globalWorkSize = candidates.size();
     
-    // Ensure globalWorkSize is a multiple of localWorkSize if required by OpenCL 1.2
     size_t remainder = globalWorkSize % m_localWorkSize;
     if (remainder != 0) {
         globalWorkSize += (m_localWorkSize - remainder);
     }
 
-    // Execute kernel
     m_currentKernel->execute(globalWorkSize, m_localWorkSize);
 
-    // Read back results
     err = clEnqueueReadBuffer(queue, d_found, CL_TRUE, 0,
                               foundFlags.size() * sizeof(uint32_t), foundFlags.data(),
                               0, nullptr, nullptr);
@@ -113,13 +115,6 @@ void GpuHasher::hashBatch(const std::vector<std::string>& candidates,
     } else {
         utils::Logger::error("Failed to read result buffer from GPU");
     }
-
-    // Clean up
-    clReleaseMemObject(d_packed);
-    clReleaseMemObject(d_offsets);
-    clReleaseMemObject(d_lengths);
-    clReleaseMemObject(d_targets);
-    clReleaseMemObject(d_found);
 #endif
 }
 

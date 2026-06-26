@@ -9,43 +9,48 @@ TEST_CASE("Apply lowercase rule", "[rules]") {
     auto rule = RuleParser::parseSingle("l");
     REQUIRE(rule.size() > 0);
 
-    auto result = engine.apply(rule, "PassWord");
-    REQUIRE(result.has_value());
-    REQUIRE(result.value() == "password");
+    std::string result;
+    bool success = engine.apply(rule, "PassWord", result);
+    REQUIRE(success);
+    REQUIRE(result == "password");
 }
 
 TEST_CASE("Apply uppercase rule", "[rules]") {
     RuleEngine engine;
     auto rule = RuleParser::parseSingle("u");
     
-    auto result = engine.apply(rule, "PassWord");
-    REQUIRE(result.has_value());
-    REQUIRE(result.value() == "PASSWORD");
+    std::string result;
+    bool success = engine.apply(rule, "PassWord", result);
+    REQUIRE(success);
+    REQUIRE(result == "PASSWORD");
 }
 
 TEST_CASE("Apply append rule", "[rules]") {
     RuleEngine engine;
     auto rule = RuleParser::parseSingle("$1");
     
-    auto result = engine.apply(rule, "password");
-    REQUIRE(result.has_value());
-    REQUIRE(result.value() == "password1");
+    std::string result;
+    bool success = engine.apply(rule, "password", result);
+    REQUIRE(success);
+    REQUIRE(result == "password1");
 }
 
 TEST_CASE("Apply prepend rule", "[rules]") {
     RuleEngine engine;
     auto rule = RuleParser::parseSingle("^!");
     
-    auto result = engine.apply(rule, "password");
-    REQUIRE(result.has_value());
-    REQUIRE(result.value() == "!password");
+    std::string result;
+    bool success = engine.apply(rule, "password", result);
+    REQUIRE(success);
+    REQUIRE(result == "!password");
 }
 
 TEST_CASE("Apply combined rules", "[rules]") {
     RuleEngine engine;
     auto rule = RuleParser::parseSingle("c $1"); // capitalize and append 1
     
-    auto result = engine.apply(rule, "password");
-    REQUIRE(result.has_value());
-    REQUIRE(result.value() == "Password1");
+    std::string result;
+    bool success = engine.apply(rule, "password", result);
+    REQUIRE(success);
+    REQUIRE(result == "Password1");
 }

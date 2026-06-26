@@ -12,8 +12,9 @@ class RuleEngine {
 public:
 
 
-    std::optional<std::string> apply(const CompiledRule& rule,
-                                      const std::string& word);
+    bool apply(const CompiledRule& rule,
+               const std::string& word,
+               std::string& out);
 
 
     std::vector<std::string> applyAll(const std::vector<CompiledRule>& rules,

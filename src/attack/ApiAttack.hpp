@@ -9,6 +9,8 @@ namespace fenrir { namespace attack {
 
 class ApiAttack : public IAttackMode {
 public:
+    ApiAttack();
+    ~ApiAttack() override;
     std::string name() const override { return "API"; }
     void initialize(const core::Config& cfg) override;
     bool nextBatch(std::vector<std::string>& candidates, size_t batchSize) override;

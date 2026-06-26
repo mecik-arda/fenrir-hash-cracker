@@ -40,9 +40,9 @@ bool RuleBasedAttack::nextBatch(std::vector<std::string>& candidates, size_t bat
         size_t toApply = std::min(rulesRemaining, needed);
 
         for (size_t i = 0; i < toApply; i++) {
-            auto mutated = m_engine.apply(m_rules[m_ruleIndex], m_currentWord);
-            if (mutated) {
-                candidates.push_back(std::move(*mutated));
+            candidates.emplace_back();
+            if (!m_engine.apply(m_rules[m_ruleIndex], m_currentWord, candidates.back())) {
+                candidates.pop_back();
             }
             m_ruleIndex++;
         }

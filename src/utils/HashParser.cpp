@@ -1,9 +1,11 @@
 #include "HashParser.hpp"
 #include "FileReader.hpp"
+#include "Logger.hpp"
 #include "../core/Constants.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <iomanip>
 #include <sstream>
 
 namespace fenrir {

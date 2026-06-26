@@ -4,9 +4,10 @@
 
 namespace fenrir { namespace rules {
 
-std::optional<std::string> RuleEngine::apply(const CompiledRule& rule,
-                                              const std::string& word) {
-    if (word.length() > 255) return std::nullopt;
+bool RuleEngine::apply(const CompiledRule& rule,
+                        const std::string& word,
+                        std::string& out) {
+    if (word.length() > 255) return false;
     int len = static_cast<int>(word.length());
     std::memcpy(m_buffer, word.data(), len);
 
@@ -16,20 +17,21 @@ std::optional<std::string> RuleEngine::apply(const CompiledRule& rule,
         uint8_t p0 = static_cast<uint8_t>((packed >> 8) & 0xFF);
         uint8_t p1 = static_cast<uint8_t>((packed >> 16) & 0xFF);
         int newLen = applyOp(op, p0, p1, m_buffer, len);
-        if (newLen < 0) return std::nullopt;
+        if (newLen < 0) return false;
         len = newLen;
         if (len > 255) len = 255;
     }
-    return std::string(m_buffer, static_cast<size_t>(len));
+    out.assign(m_buffer, static_cast<size_t>(len));
+    return true;
 }
 
 std::vector<std::string> RuleEngine::applyAll(
     const std::vector<CompiledRule>& rules, const std::string& word) {
     std::vector<std::string> results;
     results.reserve(rules.size());
+    std::string out;
     for (const auto& r : rules) {
-        auto m = apply(r, word);
-        if (m) results.push_back(std::move(*m));
+        if (apply(r, word, out)) results.push_back(out);
     }
     return results;
 }

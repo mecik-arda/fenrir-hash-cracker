@@ -52,7 +52,7 @@ std::string HashKillerProvider::httpPost(const std::string& url, const std::stri
 
 std::optional<ApiQueryResult> HashKillerProvider::query(const std::string& hash) {
 
-    std::string url = "https:
+    std::string url = "https://hashkiller.io/api/v2/query";
     std::string postData = "hash=" + hash + "&key=" + m_apiKey;
 
     auto response = httpPost(url, postData);

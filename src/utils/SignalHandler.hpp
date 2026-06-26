@@ -19,7 +19,6 @@ public:
 
     static void reset();
 
-private:
     static std::atomic<bool> s_interrupted;
     static Callback s_callback;
 };

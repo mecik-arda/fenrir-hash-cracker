@@ -142,7 +142,7 @@ endif()
 add_library(fenrir_cli STATIC
     src/cli/CliParser.cpp)
 target_include_directories(fenrir_cli PUBLIC src)
-target_link_libraries(fenrir_cli PUBLIC cli11::cli11 fenrir_core)
+target_link_libraries(fenrir_cli PUBLIC CLI11::CLI11 fenrir_core)
 
 add_executable(fenrir
     src/main.cpp)
