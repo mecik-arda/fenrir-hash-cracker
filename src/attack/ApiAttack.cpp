@@ -1,5 +1,14 @@
 #include "ApiAttack.hpp"
+#ifdef FENRIR_HAS_API
 #include "../api/ApiManager.hpp"
+#else
+namespace fenrir { namespace api {
+    struct ApiQueryResult { bool found = false; std::string plaintext = ""; };
+    struct ApiManager {
+        std::vector<ApiQueryResult> queryWithFallback(const std::vector<std::string>&, const std::string&, const std::string&) { return {}; }
+    };
+}}
+#endif
 #include "../utils/Logger.hpp"
 
 namespace fenrir { namespace attack {
