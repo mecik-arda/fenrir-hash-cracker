@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*' # Sadece v ile başlayan tag'lerde çalışır (ör. v1.0.0)
 
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     name: Build and Release
