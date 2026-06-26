@@ -13,10 +13,12 @@
     "work_group_auto_tune": true,
     "kernel_cache_dir": ".fenrir_kernel_cache",
     "async_pipeline": true,
-    "async_buffers": 2
+    "async_buffers": 2,
+    "cpu_only": false
   },
   "cpu": {
-    "enable_simd": true
+    "enable_simd": true,
+    "cpu_only": false
   },
   "api": {
     "timeout_seconds": 10,
