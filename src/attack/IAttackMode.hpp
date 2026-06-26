@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <cstring>
 
 namespace fenrir {
 namespace attack {
